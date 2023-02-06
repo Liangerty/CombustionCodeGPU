@@ -45,7 +45,7 @@ real cfd::compute_viscosity(real temperature, real mw_total, real const *Y, Spec
 __device__ void cfd::compute_transport_property(integer i, integer j, integer k, real temperature, real mw_total, const real *cp,
                                      cfd::DParameter *param, DZone* zone) {
   const auto n_spec{param->n_spec};
-  const auto mw=param->mw;
+  const real* mw=param->mw;
   const auto yk=zone->yk;
   real* X=new real [n_spec];
   real* vis=new real [n_spec];

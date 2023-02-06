@@ -78,6 +78,7 @@ __device__ void cfd::compute_total_energy(integer i, integer j, integer k, cfd::
     cv(i, j, k, 4) += enthalpy[l] * cv(i, j, k, 5 + l);
   }
   cv(i, j, k, 4) -= bv(i, j, k, 4);  // (\rho e =\rho h - p)
+  delete[]enthalpy;
 #else
   cv(i, j, k, 4) += bv(i, j, k, 4) / (cfd::gamma_air - 1);
 #endif // MULTISPECIES==1

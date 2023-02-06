@@ -18,10 +18,10 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter
   auto mem_sz = n_spec * sizeof(real);
   cudaMalloc(&mw, mem_sz);
   cudaMemcpy(mw, spec.mw.data(), mem_sz, cudaMemcpyHostToDevice);
-  high_temp_coeff.init_with_size(n_spec, n_spec);
+  high_temp_coeff.init_with_size(n_spec, 7);
   cudaMemcpy(high_temp_coeff.data(), spec.high_temp_coeff.data(), high_temp_coeff.size() * sizeof(real),
              cudaMemcpyHostToDevice);
-  low_temp_coeff.init_with_size(n_spec, n_spec);
+  low_temp_coeff.init_with_size(n_spec, 7);
   cudaMemcpy(low_temp_coeff.data(), spec.low_temp_coeff.data(), low_temp_coeff.size() * sizeof(real),
              cudaMemcpyHostToDevice);
   cudaMalloc(&t_low, mem_sz);

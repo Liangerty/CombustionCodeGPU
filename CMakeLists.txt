@@ -13,10 +13,10 @@ list(APPEND src_file
   Element.h Element.cpp
   Field.h Field.cu
   Initialize.h Initialize.cu InviscidScheme.cu InviscidScheme.cuh
-  main.cu Mesh.h Mesh.cu
+  main.cu Mesh.h Mesh.cpp
   Parallel.h Parallel.cpp Parameter.h Parameter.cpp
   Reconstruction.cu Reconstruction.cuh
-  Thermo.cuh Thermo.cu Transport.cuh Transport.cu
+  Thermo.cuh Thermo.cu TimeAdvanceFunc.cu TimeAdvanceFunc.cuh Transport.cuh Transport.cu
   ViscousScheme.cu ViscousScheme.cuh
 
   gxl_lib/Array.hpp
@@ -28,7 +28,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR})
 cmake_policy(SET CMP0074 NEW)
 find_package(MPI REQUIRED)
 
-add_executable(2_CLionGPU ${src_file} TimeAdvanceFunc.cu TimeAdvanceFunc.cuh)
+add_executable(2_CLionGPU ${src_file})
 
 set_target_properties(2_CLionGPU PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON)

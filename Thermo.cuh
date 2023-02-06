@@ -1,5 +1,6 @@
 #pragma once
 #include "Define.h"
+#include <cuda_runtime.h>
 
 namespace cfd{
 struct DParameter;
