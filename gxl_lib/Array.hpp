@@ -1,5 +1,5 @@
 #pragma once
-#ifdef GPU
+#ifdef __CUDACC__
 
 #include <cuda_runtime.h>
 
@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#ifdef GPU
+#ifdef __CUDACC__
 namespace ggxl {
 template<typename T>
 class Array3D {

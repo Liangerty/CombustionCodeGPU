@@ -7,6 +7,9 @@
 
 namespace gxl{
 template <typename T>
+#ifdef __CUDACC__
+__host__ __device__
+#endif
 int sgn(T a) {
   return a < 0 ? -1 : 1;
 }

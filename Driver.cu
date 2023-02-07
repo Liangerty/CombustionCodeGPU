@@ -113,13 +113,14 @@ void cfd::Driver::steady_simulation() {
   integer step{0};
   integer total_step{parameter.get_int("total_step")};
   const integer n_block{mesh.n_block};
+  const integer n_var{parameter.get_int("n_var")};
 
   dim3 tpb{8, 8, 4};
   if (mesh.dimension == 2) {
     tpb = {16, 16, 1};
   }
 
-//  const integer file_step{parameter.get_int("output_file")};
+  //  const integer file_step{parameter.get_int("output_file")};
   while (!converged) {
     ++step;
     /*[[unlikely]]*/if (step > total_step) {
@@ -137,9 +138,12 @@ void cfd::Driver::steady_simulation() {
 
     // Second, for each block, compute the residual dq
     for (auto b = 0; b < n_block; ++b) {
-      compute_inviscid_flux(mesh[b], field[b].d_ptr, inviscid_scheme);
+      compute_inviscid_flux(mesh[b], field[b].d_ptr, inviscid_scheme, param, n_var);
     }
     // Third, update conservative variables and apply boundary conditions.
+
+    cudaDeviceSynchronize();
+    fmt::print("Step {}\n",step);
   }
 }
 
