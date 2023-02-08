@@ -139,6 +139,7 @@ void cfd::Driver::steady_simulation() {
     // Second, for each block, compute the residual dq
     for (auto b = 0; b < n_block; ++b) {
       compute_inviscid_flux(mesh[b], field[b].d_ptr, inviscid_scheme, param, n_var);
+      compute_viscous_flux(mesh[b],field[b].d_ptr,viscous_scheme,param,n_var);
     }
     // Third, update conservative variables and apply boundary conditions.
 

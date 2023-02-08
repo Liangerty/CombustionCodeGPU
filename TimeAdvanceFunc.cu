@@ -2,6 +2,7 @@
 #include "Field.h"
 #include "Mesh.h"
 #include "InviscidScheme.cuh"
+#include "ViscousScheme.cuh"
 
 __global__ void cfd::store_last_step(cfd::DZone *zone) {
   const integer mx{zone->mx}, my{zone->my}, mz{zone->mz};
@@ -125,5 +126,95 @@ cfd::inviscid_flux_1d(cfd::DZone *zone, InviscidScheme **inviscid_scheme, intege
     for (integer l = 0; l < n_var; ++l) {
       zone->dq(idx[0], idx[1], idx[2], l) -= fc[tid * n_var + l] - fc[(tid - 1) * n_var + l];
     }
+  }
+}
+
+void cfd::compute_viscous_flux(const cfd::Block &block, cfd::DZone *zone, cfd::ViscousScheme **viscous_scheme,
+                               cfd::DParameter *param, integer n_var) {
+  const integer extent[3]{block.mx, block.my, block.mz};
+  const integer ngg{block.ngg};
+  const integer dim{extent[2] == 1 ? 2 : 3};
+  constexpr integer block_dim=64;
+
+  dim3 tpb{block_dim,1,1};
+  dim3 bpg((extent[0]-1)/(block_dim-1)+1,extent[1],extent[2]);
+  auto shared_mem=block_dim*n_var* sizeof(real);
+  viscous_flux_fv<<<bpg, tpb, shared_mem>>>(zone, viscous_scheme, extent[0], param);
+
+  tpb={1,block_dim,1};
+  bpg=(extent[0],(extent[1]-1)/(block_dim-1)+1,extent[2]);
+  viscous_flux_gv<<<bpg, tpb, shared_mem>>>(zone, viscous_scheme, extent[1], param);
+
+  if (dim==3){
+    tpb={1,1,block_dim};
+    bpg=(extent[0],extent[1],(extent[2]-1)/(block_dim-1)+1);
+    viscous_flux_hv<<<bpg, tpb, shared_mem>>>(zone, viscous_scheme, extent[2], param);
+  }
+}
+
+__global__ void
+cfd::viscous_flux_fv(cfd::DZone *zone, cfd::ViscousScheme **viscous_scheme, integer max_extent,
+                     cfd::DParameter *param) {
+  integer idx[3];
+  idx[0] = ((integer) blockDim.x - 1) * blockIdx.x + threadIdx.x-1;
+  idx[1] = (integer) (blockDim.y * blockIdx.y + threadIdx.y);
+  idx[2] = (integer) (blockDim.z * blockIdx.z + threadIdx.z);
+  if (idx[0] >= max_extent) return;
+  const auto tid=threadIdx.x;
+  const auto n_var{zone->n_var};
+
+  extern __shared__ real s[];
+  real* fv=s;
+
+  (*viscous_scheme)->compute_fv(idx,zone,&fv[tid*n_var],param);
+  __syncthreads();
+
+  if (tid>0){
+    for (integer l=0;l<n_var;++l)
+      zone->dq(idx[0],idx[1],idx[2],l)+=fv[tid*n_var+l]-fv[(tid-1)*n_var+l];
+  }
+}
+
+__global__ void cfd::viscous_flux_gv(cfd::DZone *zone, cfd::ViscousScheme **viscous_scheme, integer max_extent,
+                                     cfd::DParameter *param) {
+  integer idx[3];
+  idx[0] = (integer) (blockDim.x * blockIdx.x + threadIdx.x);
+  idx[1] = ((integer) blockDim.y - 1) * blockIdx.y + threadIdx.y-1;
+  idx[2] = (integer) (blockDim.z * blockIdx.z + threadIdx.z);
+  if (idx[1] >= max_extent) return;
+  const auto tid=threadIdx.y;
+  const auto n_var{zone->n_var};
+
+  extern __shared__ real s[];
+  real* gv=s;
+
+  (*viscous_scheme)->compute_gv(idx,zone,&gv[tid*n_var],param);
+  __syncthreads();
+
+  if (tid>0){
+    for (integer l=0;l<n_var;++l)
+      zone->dq(idx[0],idx[1],idx[2],l)+=gv[tid*n_var+l]-gv[(tid-1)*n_var+l];
+  }
+}
+
+__global__ void cfd::viscous_flux_hv(cfd::DZone *zone, cfd::ViscousScheme **viscous_scheme, integer max_extent,
+                                     cfd::DParameter *param) {
+  integer idx[3];
+  idx[0] = (integer) (blockDim.x * blockIdx.x + threadIdx.x);
+  idx[1] = (integer) (blockDim.y * blockIdx.y + threadIdx.y);
+  idx[2] = ((integer) blockDim.z - 1) * blockIdx.z + threadIdx.z-1;
+  if (idx[2] >= max_extent) return;
+  const auto tid=threadIdx.z;
+  const auto n_var{zone->n_var};
+
+  extern __shared__ real s[];
+  real* hv=s;
+
+  (*viscous_scheme)->compute_hv(idx,zone,&hv[tid*n_var],param);
+  __syncthreads();
+
+  if (tid>0){
+    for (integer l=0;l<n_var;++l)
+      zone->dq(idx[0],idx[1],idx[2],l)+=hv[tid*n_var+l]-hv[(tid-1)*n_var+l];
   }
 }
