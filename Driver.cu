@@ -7,6 +7,7 @@
 #include "Thermo.cuh"
 #include "fmt/core.h"
 #include "TimeAdvanceFunc.cuh"
+#include "TemporalScheme.cuh"
 
 #if MULTISPECIES == 1
 #else
@@ -140,6 +141,7 @@ void cfd::Driver::steady_simulation() {
     for (auto b = 0; b < n_block; ++b) {
       compute_inviscid_flux(mesh[b], field[b].d_ptr, inviscid_scheme, param, n_var);
       compute_viscous_flux(mesh[b],field[b].d_ptr,viscous_scheme,param,n_var);
+      compute_local_time_step(mesh[b],field[b].d_ptr,param,temporal_scheme);
     }
     // Third, update conservative variables and apply boundary conditions.
 
@@ -166,5 +168,20 @@ __global__ void cfd::setup_schemes(cfd::InviscidScheme **inviscid_scheme, cfd::V
       break;
     default:*viscous_scheme = new ViscousScheme;
       printf("Inviscid computaion\n");
+  }
+
+  const integer temporal_tag{param->temporal_scheme};
+  switch (temporal_tag) {
+    case 0:
+      *temporal_scheme=new SteadyTemporalScheme;
+      printf("Temporal scheme: 1st order explicit Euler\n");
+      break;
+    case 1:
+      *temporal_scheme=new LUSGS;
+      printf("Temporal scheme: Implicit LUSGS\n");
+      break;
+    default:
+      *temporal_scheme=new SteadyTemporalScheme;
+      printf("Temporal scheme: 1st order explicit Euler\n");
   }
 }

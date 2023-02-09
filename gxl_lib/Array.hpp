@@ -19,7 +19,7 @@ private:
   T *val = nullptr;
 
 public:
-  Array3D() {}
+  __host__ __device__ Array3D() {}
 
   // Shallow copy constructor
   Array3D(const Array3D& b):ng(b.ng), n1(b.n1), n2(b.n2),n3(b.n3),disp1(b.disp1),disp2(b.disp2),dispt(b.dispt),sz(b.sz),val(b.val){}

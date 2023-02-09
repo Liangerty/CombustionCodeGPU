@@ -5,13 +5,13 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter
 #if MULTISPECIES == 1
     , ChemData &chem_data
 #endif
-) : myid{parameter.get_int("myid")}, dim{parameter.get_int("dimension")},
+) : myid{parameter.get_int("myid")}, dim{parameter.get_int("dimension")},n_block(parameter.get_int("n_block")),
     inviscid_scheme{parameter.get_int("inviscid_scheme")},
     reconstruction{parameter.get_int("reconstruction")},
     limiter{parameter.get_int("limiter")},
     viscous_scheme{parameter.get_int("viscous_order")},
     temporal_scheme{parameter.get_int("temporal_scheme")},
-    Pr(parameter.get_real("prandtl_number")) {
+    Pr(parameter.get_real("prandtl_number")), cfl(parameter.get_real("cfl")) {
 #if MULTISPECIES == 1
   const auto &spec = chem_data.spec;
   n_spec = spec.n_spec;

@@ -17,7 +17,7 @@ list(APPEND src_file
   main.cu Mesh.h Mesh.cpp
   Parallel.h Parallel.cpp Parameter.h Parameter.cpp
   Reconstruction.cu Reconstruction.cuh
-  Thermo.cuh Thermo.cu TimeAdvanceFunc.cu TimeAdvanceFunc.cuh Transport.cuh Transport.cu
+  TemporalScheme.cu TemporalScheme.cuh Thermo.cuh Thermo.cu TimeAdvanceFunc.cu TimeAdvanceFunc.cuh Transport.cuh Transport.cu
   ViscousScheme.cu ViscousScheme.cuh
 
   gxl_lib/Array.hpp

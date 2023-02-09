@@ -170,7 +170,7 @@ private:
   std::vector<Block> block;
 
 public:
-  explicit Mesh(const Parameter &parameter);
+  explicit Mesh(Parameter &parameter);
 
   Block &operator[](size_t i);
 

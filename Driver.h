@@ -41,5 +41,6 @@ private:
   void steady_simulation();
 };
 
-__global__ void setup_schemes(InviscidScheme** inviscid_scheme, ViscousScheme **viscous_scheme, TemporalScheme** temporal_scheme, DParameter* param);
+__global__ void setup_schemes(cfd::InviscidScheme **inviscid_scheme, cfd::ViscousScheme **viscous_scheme,
+                              cfd::TemporalScheme **temporal_scheme, cfd::DParameter *param);
 }

@@ -3,6 +3,7 @@
 #include "Mesh.h"
 #include "InviscidScheme.cuh"
 #include "ViscousScheme.cuh"
+#include "TemporalScheme.cuh"
 
 __global__ void cfd::store_last_step(cfd::DZone *zone) {
   const integer mx{zone->mx}, my{zone->my}, mz{zone->mz};
@@ -217,4 +218,26 @@ __global__ void cfd::viscous_flux_hv(cfd::DZone *zone, cfd::ViscousScheme **visc
     for (integer l=0;l<n_var;++l)
       zone->dq(idx[0],idx[1],idx[2],l)+=hv[tid*n_var+l]-hv[(tid-1)*n_var+l];
   }
+}
+
+void cfd::compute_local_time_step(const cfd::Block &block, cfd::DZone *zone, cfd::DParameter *param, TemporalScheme **temporal_scheme) {
+  const integer extent[3]{block.mx, block.my, block.mz};
+  const integer ngg{block.ngg};
+  const integer dim{extent[2] == 1 ? 2 : 3};
+
+  dim3 tpb{8, 8, 4};
+  if (dim == 2)
+    tpb = {16, 16, 1};
+  dim3 bpg{(extent[0]-1)/tpb.x+1,(extent[1]-1)/tpb.y+1,(extent[2]-1)/tpb.z+1};
+  local_time_step<<<bpg,tpb>>>(zone,param,temporal_scheme);
+}
+
+__global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param, TemporalScheme **temporal_scheme) {
+  const integer extent[3]{zone->mx, zone->my, zone->mz};
+  const auto i=(integer)(blockDim.x*blockIdx.x+threadIdx.x);
+  const auto j=(integer)(blockDim.y*blockIdx.y+threadIdx.y);
+  const auto k=(integer)(blockDim.z*blockIdx.z+threadIdx.z);
+  if (i>=extent[0]||j>=extent[1]||k>=extent[2]) return;
+
+  (*temporal_scheme)->compute_time_step(zone, i, j, k, param);
 }

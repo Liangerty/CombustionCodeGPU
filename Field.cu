@@ -118,6 +118,7 @@ void cfd::Field::setup_device_memory(const Parameter &parameter, const Block &b)
   cudaMemcpy(h_ptr->bv.data(), h_zone.bv.data(), sizeof(real) * h_ptr->bv.sz, cudaMemcpyHostToDevice);
   h_ptr->bv_last.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 4, 0);
   h_ptr->vel.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
+  h_ptr->acoustic_speed.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
   h_ptr->mach.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
   h_ptr->mul.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
   h_ptr->conductivity.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
@@ -126,8 +127,15 @@ void cfd::Field::setup_device_memory(const Parameter &parameter, const Block &b)
   h_ptr->yk.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_spec, h_ptr->ngg);
   cudaMemcpy(h_ptr->yk.data(), h_zone.yk.data(), sizeof(real) * h_ptr->yk.sz, cudaMemcpyHostToDevice);
   h_ptr->rho_D.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_spec, h_ptr->ngg);
+  h_ptr->gamma.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
 #endif // MULTISPECIES==1
   h_ptr->dq.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_var, 0);
+  if (parameter.get_int("temporal_scheme")==1){//LUSGS
+    h_ptr->inv_spectr_rad.allocate_memory(h_ptr->mx,h_ptr->my,h_ptr->mz,0);
+    h_ptr->visc_spectr_rad.allocate_memory(h_ptr->mx,h_ptr->my,h_ptr->mz,0);
+  }
+  if (parameter.get_bool("steady")) // steady simulation
+    h_ptr->dt_local.allocate_memory(h_ptr->mx,h_ptr->my,h_ptr->mz,0);
 
   cudaMalloc(&d_ptr, sizeof(DZone));
   cudaMemcpy(d_ptr, h_ptr, sizeof(DZone), cudaMemcpyHostToDevice);
@@ -184,15 +192,15 @@ __global__ void cfd::update_physical_properties(cfd::DZone *zone, cfd::DParamete
   }
   mw = 1 / mw;
   const auto gamma=cp_tot/cv;
-  const auto acoustic_speed=std::sqrt(gamma*R_u*temperature/mw);
+  zone->acoustic_speed(i,j,k)=std::sqrt(gamma*R_u*temperature/mw);
   compute_transport_property(i,j,k,temperature,mw,cp,param,zone);
   delete[] cp;
 #else
   constexpr real c_temp{gamma_air * R_u / mw_air};
   const real pr = param->Pr;
-  const auto acoustic_speed = std::sqrt(c_temp * temperature);
+  zone->acoustic_speed(i,j,k) = std::sqrt(c_temp * temperature);
   zone->mul(i, j, k) = Sutherland(temperature);
   zone->conductivity(i, j, k) = zone->mul(i, j, k) * c_temp / (gamma_air - 1) / pr;
 #endif
-  zone->mach(i, j, k) = zone->vel(i, j, k) / acoustic_speed;
+  zone->mach(i, j, k) = zone->vel(i, j, k) / zone->acoustic_speed(i,j,k);
 }

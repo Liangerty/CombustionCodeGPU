@@ -8,6 +8,7 @@ struct DZone;
 class Block;
 class InviscidScheme;
 class ViscousScheme;
+struct TemporalScheme;
 
 __global__ void store_last_step(DZone* zone);
 
@@ -27,4 +28,8 @@ __global__ void
 viscous_flux_gv(cfd::DZone *zone, cfd::ViscousScheme **viscous_scheme, integer max_extent, cfd::DParameter *param);
 __global__ void
 viscous_flux_hv(cfd::DZone *zone, cfd::ViscousScheme **viscous_scheme, integer max_extent, cfd::DParameter *param);
+
+void compute_local_time_step(const Block &block, cfd::DZone *zone, DParameter *param, TemporalScheme **temporal_scheme);
+
+__global__ void local_time_step(cfd::DZone *zone, DParameter *param, TemporalScheme **temporal_scheme);
 }

@@ -42,14 +42,19 @@ struct DZone {
   ggxl::VectorField3D<real> bv; // Basic variable: 0-density, 1-u, 2-v, 3-w, 4-pressure, 5-temperature
   ggxl::VectorField3D<real> bv_last; // Basic variable of last step: 0-density, 1-velocity magnitude, 2-pressure, 3-temperature
   ggxl::Array3D<real> vel;      // Velocity magnitude
+  ggxl::Array3D<real> acoustic_speed;
   ggxl::Array3D<real> mach;     // Mach number
   ggxl::Array3D<real> mul;      // Dynamic viscosity
   ggxl::Array3D<real> conductivity;      // Dynamic viscosity
 #if MULTISPECIES == 1
   ggxl::VectorField3D<real> yk; // Mass fraction of various species
   ggxl::VectorField3D<real> rho_D; // the mass diffusivity of species
+  ggxl::Array3D<real> gamma;  // specific heat ratio
 #endif // MULTISPECIES==1
   ggxl::VectorField3D<real> dq; // The residual for flux computing
+  ggxl::Array3D<real[3]> inv_spectr_rad;  // inviscid spectral radius. Used when LUSGS type temporal scheme is used.
+  ggxl::Array3D<real> visc_spectr_rad;  // viscous spectral radius.
+  ggxl::Array3D<real> dt_local; //local time step. Used for steady flow simulation
 };
 
 #endif

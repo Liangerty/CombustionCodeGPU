@@ -514,13 +514,14 @@ void cfd::Block::trim_abundant_ghost_mesh() {
   }
 }
 
-cfd::Mesh::Mesh(const Parameter &parameter) {
+cfd::Mesh::Mesh(Parameter &parameter) {
   const integer myid = parameter.get_int("myid");
   const bool parallel = parameter.get_bool("parallel");
   const integer ngg{parameter.get_int("ngg")};
   //First read the grid points into memory
   dimension = parameter.get_int("dimension");
   read_grid(myid, ngg);
+  parameter.update_int_parameter("n_block",n_block);
   if (myid == 0) {
     fmt::print("Problem dimension: {}\nTotal grid number: {}\n", dimension, n_grid_total);
   }
