@@ -32,4 +32,8 @@ viscous_flux_hv(cfd::DZone *zone, cfd::ViscousScheme **viscous_scheme, integer m
 void compute_local_time_step(const Block &block, cfd::DZone *zone, DParameter *param, TemporalScheme **temporal_scheme);
 
 __global__ void local_time_step(cfd::DZone *zone, DParameter *param, TemporalScheme **temporal_scheme);
+
+void update_conservative_variables(const Block &block, cfd::DZone *zone, DParameter *param);
+
+__global__ void update_cv(cfd::DZone *zone, DParameter *param);
 }

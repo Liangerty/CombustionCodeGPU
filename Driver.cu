@@ -142,6 +142,7 @@ void cfd::Driver::steady_simulation() {
       compute_inviscid_flux(mesh[b], field[b].d_ptr, inviscid_scheme, param, n_var);
       compute_viscous_flux(mesh[b],field[b].d_ptr,viscous_scheme,param,n_var);
       compute_local_time_step(mesh[b],field[b].d_ptr,param,temporal_scheme);
+      update_conservative_variables(mesh[b],field[b].d_ptr,param);
     }
     // Third, update conservative variables and apply boundary conditions.
 

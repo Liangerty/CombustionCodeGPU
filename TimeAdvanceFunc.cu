@@ -241,3 +241,29 @@ __global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param, T
 
   (*temporal_scheme)->compute_time_step(zone, i, j, k, param);
 }
+
+void cfd::update_conservative_variables(const Block &block, cfd::DZone *zone, DParameter *param) {
+  const integer extent[3]{block.mx, block.my, block.mz};
+  const integer ngg{block.ngg};
+  const integer dim{extent[2] == 1 ? 2 : 3};
+
+  dim3 tpb{8, 8, 4};
+  if (dim == 2)
+    tpb = {16, 16, 1};
+  dim3 bpg{(extent[0]-1)/tpb.x+1,(extent[1]-1)/tpb.y+1,(extent[2]-1)/tpb.z+1};
+  update_cv<<<bpg,tpb>>>(zone,param);
+}
+
+__global__ void cfd::update_cv(cfd::DZone *zone, cfd::DParameter *param) {
+  const integer extent[3]{zone->mx, zone->my, zone->mz};
+  const auto i=(integer)(blockDim.x*blockIdx.x+threadIdx.x);
+  const auto j=(integer)(blockDim.y*blockIdx.y+threadIdx.y);
+  const auto k=(integer)(blockDim.z*blockIdx.z+threadIdx.z);
+  if (i>=extent[0]||j>=extent[1]||k>=extent[2]) return;
+
+  real dt_div_jac=zone->dt_local(i,j,k)/zone->jac(i,j,k);
+  for (integer l=0;l<zone->n_var;++l)
+    zone->cv(i,j,k,l)+=zone->dq(i,j,k,l)*dt_div_jac;
+  if (extent[2]==1)
+    zone->cv(i,j,k,3)=0;
+}
