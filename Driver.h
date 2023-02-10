@@ -38,6 +38,7 @@ struct Driver {
 #endif
 
 private:
+  void data_communication();
   void steady_simulation();
 };
 

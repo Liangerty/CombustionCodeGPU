@@ -4,6 +4,11 @@
 #include "InviscidScheme.cuh"
 #include "ViscousScheme.cuh"
 #include "TemporalScheme.cuh"
+#if MULTISPECIES==1
+#else
+#include "Constants.h"
+#endif
+#include "Thermo.cuh"
 
 __global__ void cfd::store_last_step(cfd::DZone *zone) {
   const integer mx{zone->mx}, my{zone->my}, mz{zone->mz};
@@ -220,18 +225,6 @@ __global__ void cfd::viscous_flux_hv(cfd::DZone *zone, cfd::ViscousScheme **visc
   }
 }
 
-void cfd::compute_local_time_step(const cfd::Block &block, cfd::DZone *zone, cfd::DParameter *param, TemporalScheme **temporal_scheme) {
-  const integer extent[3]{block.mx, block.my, block.mz};
-  const integer ngg{block.ngg};
-  const integer dim{extent[2] == 1 ? 2 : 3};
-
-  dim3 tpb{8, 8, 4};
-  if (dim == 2)
-    tpb = {16, 16, 1};
-  dim3 bpg{(extent[0]-1)/tpb.x+1,(extent[1]-1)/tpb.y+1,(extent[2]-1)/tpb.z+1};
-  local_time_step<<<bpg,tpb>>>(zone,param,temporal_scheme);
-}
-
 __global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param, TemporalScheme **temporal_scheme) {
   const integer extent[3]{zone->mx, zone->my, zone->mz};
   const auto i=(integer)(blockDim.x*blockIdx.x+threadIdx.x);
@@ -242,28 +235,39 @@ __global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param, T
   (*temporal_scheme)->compute_time_step(zone, i, j, k, param);
 }
 
-void cfd::update_conservative_variables(const Block &block, cfd::DZone *zone, DParameter *param) {
-  const integer extent[3]{block.mx, block.my, block.mz};
-  const integer ngg{block.ngg};
-  const integer dim{extent[2] == 1 ? 2 : 3};
-
-  dim3 tpb{8, 8, 4};
-  if (dim == 2)
-    tpb = {16, 16, 1};
-  dim3 bpg{(extent[0]-1)/tpb.x+1,(extent[1]-1)/tpb.y+1,(extent[2]-1)/tpb.z+1};
-  update_cv<<<bpg,tpb>>>(zone,param);
-}
-
-__global__ void cfd::update_cv(cfd::DZone *zone, cfd::DParameter *param) {
+__global__ void cfd::update_cv_and_bv(cfd::DZone *zone, cfd::DParameter *param) {
   const integer extent[3]{zone->mx, zone->my, zone->mz};
   const auto i=(integer)(blockDim.x*blockIdx.x+threadIdx.x);
   const auto j=(integer)(blockDim.y*blockIdx.y+threadIdx.y);
   const auto k=(integer)(blockDim.z*blockIdx.z+threadIdx.z);
   if (i>=extent[0]||j>=extent[1]||k>=extent[2]) return;
 
+  auto& cv=zone->cv;
+
   real dt_div_jac=zone->dt_local(i,j,k)/zone->jac(i,j,k);
   for (integer l=0;l<zone->n_var;++l)
-    zone->cv(i,j,k,l)+=zone->dq(i,j,k,l)*dt_div_jac;
+    cv(i,j,k,l)+=zone->dq(i,j,k,l)*dt_div_jac;
   if (extent[2]==1)
-    zone->cv(i,j,k,3)=0;
+    cv(i,j,k,3)=0;
+
+  auto& bv=zone->bv;
+  auto& velocity=zone->vel(i, j, k);
+
+  bv(i, j, k, 0)  = cv(i, j, k, 0);
+  const real density_inv = 1.0 / cv(i, j, k, 0);
+  bv(i, j, k, 1)  = cv(i, j, k, 1) * density_inv;
+  bv(i, j, k, 2)  = cv(i, j, k, 2) * density_inv;
+  bv(i, j, k, 3)  = cv(i, j, k, 3) * density_inv;
+  velocity = bv(i, j, k, 1) * bv(i, j, k, 1) + bv(i, j, k, 2) * bv(i, j, k, 2) + bv(i, j, k, 3) * bv(i, j, k, 3); //V^2
+#if MULTISPECIES==1
+  auto &Y=zone->yk;
+  for (int l = 0; l < zone->n_spec; ++l)
+    Y(i, j, k, l) = cv(i, j, k, 5 + l) * density_inv;
+  compute_temperature(i, j, k, param, zone);
+#else
+  // Air
+  bv(i, j, k, 4) = (gamma_air - 1) * (cv(i, j, k, 4) - 0.5 * bv(i, j, k, 0) * velocity);
+  bv(i, j, k, 5) = bv(i, j, k, 4) * mw_air * density_inv / R_u;
+#endif
+  velocity = std::sqrt(velocity);
 }

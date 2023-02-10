@@ -310,29 +310,6 @@ void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> 
       apply_wall<<<BPG, TPB>>>(field[i_zone].d_ptr, &wall[l], param, i_face);
     }
   }
-
-  // -1 - inner faces
-  for (auto blk=0;blk<mesh.n_block;++blk){
-    auto& inF=mesh[blk].inner_face;
-    const auto n_innFace=inF.size();
-    auto v=field[blk].d_ptr;
-    const auto ngg = mesh[blk].ngg;
-    for (auto l=0;l<n_innFace;++l){
-      // reference to the current face
-      const auto& fc = mesh[blk].inner_face[l];
-      uint tpb[3], bpg[3], n_point[3];
-      for (size_t j=0;j<3;++j){
-        n_point[j]= abs(fc.range_start[j]-fc.range_end[j])+1;
-        tpb[j]=n_point[j]<=(2*ngg+1)?1:16;
-        bpg[j]=(n_point[j]-1)/tpb[j]+1;
-      }
-      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-
-      // variables of the neighbor block
-      auto nv = field[fc.target_block].d_ptr;
-      inner_communication<<<BPG, TPB>>>(v, nv, n_point,l);
-    }
-  }
 }
 
 void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Species &species) {
@@ -645,59 +622,6 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
     compute_total_energy(i_gh[0], i_gh[1], i_gh[2], zone, param);
   }
 
-}
-
-__global__ void inner_communication(DZone *zone, DZone *tar_zone, const uint n_point[3], integer i_face) {
-  uint n[3];
-  n[0]=blockIdx.x*blockDim.x+threadIdx.x;
-  n[1]=blockDim.y+blockIdx.y+threadIdx.y;
-  n[2]=blockIdx.z*blockDim.z+threadIdx.z;
-  if (n[0]>=n_point[0]||n[1]>=n_point[1]||n[2]>=n_point[2]) return;
-
-  integer idx[3], idx_tar[3];
-  const auto& f=zone->innerface[i_face];
-  for (integer i=0;i<3;++i) {
-    auto d_idx= f.loop_dir[i] * (integer)(n[i]);
-    idx[i]= f.range_start[i] + d_idx;
-    idx_tar[i]=f.target_start[i]+f.target_loop_dir[i]*d_idx;
-  }
-
-  // The face direction: which of i(0)/j(1)/k(2) is the coincided face.
-  const auto face_dir{f.direction > 0 ? f.range_start[f.face] : f.range_end[f.face]};
-
-  if (idx[f.face]==face_dir){
-    // If this is the corresponding face, then average the values from both blocks
-    for (integer l = 0; l < 6; ++l) {
-      const auto ave = 0.5 * (tar_zone->bv(idx_tar[0], idx_tar[1], idx_tar[2],l)+zone->bv(idx[0],idx[1],idx[2],l));
-      zone->bv(idx[0],idx[1],idx[2],l) = ave;
-      tar_zone->bv(idx_tar[0], idx_tar[1], idx_tar[2],l) = ave;
-    }
-    for (int l = 0; l < zone->n_var; ++l) {
-      const double ave = 0.5 * (tar_zone->cv(idx_tar[0], idx_tar[1], idx_tar[2],l)+zone->cv(idx[0],idx[1],idx[2],l));
-      zone->cv(idx[0],idx[1],idx[2],l) = ave;
-      tar_zone->cv(idx_tar[0], idx_tar[1], idx_tar[2],l) = ave;
-    }
-#if MULTISPECIES==1
-    for (int l = 0; l < zone->n_spec; ++l) {
-      double ave = 0.5 * (tar_zone->yk(idx_tar[0], idx_tar[1], idx_tar[2],l)+zone->yk(idx[0],idx[1],idx[2],l));
-      zone->yk(idx[0],idx[1],idx[2],l) = ave;
-      tar_zone->yk(idx_tar[0], idx_tar[1], idx_tar[2],l) = ave;
-    }
-#endif
-  } else{
-    // Else, get the inner value for this block's ghost grid
-    for (int l = 0; l < 5; ++l) {
-      zone->bv(idx[0],idx[1],idx[2],l) = tar_zone->bv(idx_tar[0], idx_tar[1], idx_tar[2],l);
-      zone->cv(idx[0],idx[1],idx[2],l) = tar_zone->cv(idx_tar[0], idx_tar[1], idx_tar[2],l);
-    }
-    zone->bv(idx[0],idx[1],idx[2],5) = tar_zone->bv(idx_tar[0], idx_tar[1], idx_tar[2],5);
-#if MULTISPECIES==1
-    for (int l = 0; l < zone->n_spec; ++l) {
-      zone->yk(idx[0],idx[1],idx[2],l) = tar_zone->yk(idx_tar[0], idx_tar[1], idx_tar[2],l);
-      zone->cv(idx[0],idx[1],idx[2],l+5)=tar_zone->cv(idx_tar[0], idx_tar[1], idx_tar[2],l+5);
-    }
-#endif
-  }
 }
 } // cfd
 #endif

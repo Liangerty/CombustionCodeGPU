@@ -24,7 +24,7 @@ __device__ void cfd::compute_enthalpy(real t, real *enthalpy, cfd::DParameter *p
   }
 }
 
-__device__ void cfd::compute_enthalpy_and_cp(real t, real *enthalpy, real *cp, cfd::DParameter *param) {
+__device__ void cfd::compute_enthalpy_and_cp(real t, real *enthalpy, real *cp, const DParameter *param) {
   const double t2{t * t}, t3{t2 * t}, t4{t3 * t}, t5{t4 * t};
   for (int i = 0; i < param->n_spec; ++i) {
     if (t < param->t_low[i]) {
@@ -83,4 +83,42 @@ __device__ void cfd::compute_total_energy(integer i, integer j, integer k, cfd::
   cv(i, j, k, 4) += bv(i, j, k, 4) / (cfd::gamma_air - 1);
 #endif // MULTISPECIES==1
   vel(i, j, k) = sqrt(vel(i, j, k));
+}
+
+__device__ void cfd::compute_temperature(int i, int j, int k, const cfd::DParameter *param, cfd::DZone *zone) {
+  const integer n_spec=param->n_spec;
+  auto& Y=zone->yk;
+  auto& Q=zone->cv;
+  auto& bv=zone->bv;
+
+  real mw{0};
+  for (integer l = 0; l < n_spec; ++l)
+    mw += Y(i, j, k, l) / param->mw[l];
+  mw = 1 / mw;
+  const real gas_const = R_u / mw;
+  const real e = Q(i, j, k, 4) / Q(i, j, k, 0) - 0.5 * (bv(i, j, k, 1) * bv(i, j, k, 1) + bv(i, j, k, 2) * bv(i, j, k, 2) + bv(i, j, k, 3) * bv(i, j, k, 3));
+
+  real err{1}, t{bv(i, j, k, 5)};
+  constexpr integer max_iter{1000};
+  constexpr real eps{1e-3};
+  integer iter = 0;
+  real* mem=new real [2*n_spec];
+  real *h_i=mem;
+  real* cp_i=&h_i[n_spec];
+  while (err > eps && iter++ < max_iter) {
+    compute_enthalpy_and_cp(t,h_i,cp_i,param);
+    real cp_tot{0}, h{0};
+    for (integer l=0;l<n_spec;++l){
+      cp_tot+=cp_i[l]*Y(i,j,k,l);
+      h+=h_i[l]*Y(i,j,k,l);
+    }
+    const real e_t    = h - gas_const * t;
+    const real cv     = cp_tot - gas_const;
+    const real t1     = t - (e_t - e) / cv;
+    err = std::abs(1 - t1 / t);
+    t = t1;
+  }
+  delete[]mem;
+  bv(i, j, k, 5) = t;
+  bv(i, j, k, 4) = bv(i, j, k, 0) * bv(i, j, k, 5) * gas_const;
 }

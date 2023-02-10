@@ -61,6 +61,4 @@ __global__ void apply_inflow(DZone *zone, Inflow *inflow, DParameter *param, int
 
 __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i_face);
 
-__global__ void inner_communication(DZone *zone, DZone *tar_zone, const uint n_point[3], integer i_face);
-
 } // cfd

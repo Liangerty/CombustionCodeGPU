@@ -87,17 +87,17 @@ void cfd::Field::setup_device_memory(const Parameter &parameter, const Block &b)
   h_ptr->mx = b.mx, h_ptr->my = b.my, h_ptr->mz = b.mz, h_ptr->ngg = b.ngg;
 
   h_ptr->x.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  cudaMemcpy(h_ptr->x.data(),b.x.data(),sizeof(real)*h_ptr->x.size(),cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->x.data(), b.x.data(), sizeof(real) * h_ptr->x.size(), cudaMemcpyHostToDevice);
   h_ptr->y.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  cudaMemcpy(h_ptr->y.data(),b.y.data(),sizeof(real)*h_ptr->y.size(),cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->y.data(), b.y.data(), sizeof(real) * h_ptr->y.size(), cudaMemcpyHostToDevice);
   h_ptr->z.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  cudaMemcpy(h_ptr->z.data(),b.z.data(),sizeof(real)*h_ptr->z.size(),cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->z.data(), b.z.data(), sizeof(real) * h_ptr->z.size(), cudaMemcpyHostToDevice);
 
   auto n_bound{b.boundary.size()};
   auto n_inner{b.inner_face.size()};
   auto n_par{b.parallel_face.size()};
   auto mem_sz = sizeof(Boundary) * n_bound;
-  cudaMalloc(&h_ptr->boundary,mem_sz);
+  cudaMalloc(&h_ptr->boundary, mem_sz);
   cudaMemcpy(h_ptr->boundary, b.boundary.data(), mem_sz, cudaMemcpyHostToDevice);
   mem_sz = sizeof(InnerFace) * n_inner;
   cudaMalloc(&h_ptr->innerface, mem_sz);
@@ -107,9 +107,9 @@ void cfd::Field::setup_device_memory(const Parameter &parameter, const Block &b)
   cudaMemcpy(h_ptr->parface, b.parallel_face.data(), mem_sz, cudaMemcpyHostToDevice);
 
   h_ptr->jac.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  cudaMemcpy(h_ptr->jac.data(),b.jacobian.data(),sizeof(real)*h_ptr->jac.size(),cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->jac.data(), b.jacobian.data(), sizeof(real) * h_ptr->jac.size(), cudaMemcpyHostToDevice);
   h_ptr->metric.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  cudaMemcpy(h_ptr->metric.data(),b.metric.data(), sizeof(gxl::Matrix<real, 3, 3, 1>) * h_ptr->metric.size(),
+  cudaMemcpy(h_ptr->metric.data(), b.metric.data(), sizeof(gxl::Matrix<real, 3, 3, 1>) * h_ptr->metric.size(),
              cudaMemcpyHostToDevice);
 
   h_ptr->n_var = parameter.get_int("n_var");
@@ -130,12 +130,13 @@ void cfd::Field::setup_device_memory(const Parameter &parameter, const Block &b)
   h_ptr->gamma.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
 #endif // MULTISPECIES==1
   h_ptr->dq.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_var, 0);
-  if (parameter.get_int("temporal_scheme")==1){//LUSGS
-    h_ptr->inv_spectr_rad.allocate_memory(h_ptr->mx,h_ptr->my,h_ptr->mz,0);
-    h_ptr->visc_spectr_rad.allocate_memory(h_ptr->mx,h_ptr->my,h_ptr->mz,0);
+  if (parameter.get_int("temporal_scheme") == 1) {//LUSGS
+    h_ptr->inv_spectr_rad.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 0);
+    h_ptr->visc_spectr_rad.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 0);
   }
-  if (parameter.get_bool("steady")) // steady simulation
-    h_ptr->dt_local.allocate_memory(h_ptr->mx,h_ptr->my,h_ptr->mz,0);
+  if (parameter.get_bool("steady")) { // steady simulation
+    h_ptr->dt_local.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 0);
+  }
 
   cudaMalloc(&d_ptr, sizeof(DZone));
   cudaMemcpy(d_ptr, h_ptr, sizeof(DZone), cudaMemcpyHostToDevice);
@@ -181,19 +182,19 @@ __global__ void cfd::update_physical_properties(cfd::DZone *zone, cfd::DParamete
   const real temperature{zone->bv(i, j, k, 5)};
 #if MULTISPECIES == 1
   const integer n_spec{zone->n_spec};
-  auto& yk=zone->yk;
+  auto &yk = zone->yk;
   real mw{0}, cp_tot{0}, cv{0};
   real *cp = new real[n_spec];
-  compute_cp(temperature,cp,param);
-  for (auto l=0;l<n_spec;++l){
-    mw+=yk(i,j,k,l)/param->mw[l];
-    cp_tot+=yk(i,j,k,l)*cp[l];
-    cv+=yk(i,j,k,l)*(cp[l]-R_u/param->mw[l]);
+  compute_cp(temperature, cp, param);
+  for (auto l = 0; l < n_spec; ++l) {
+    mw += yk(i, j, k, l) / param->mw[l];
+    cp_tot += yk(i, j, k, l) * cp[l];
+    cv += yk(i, j, k, l) * (cp[l] - R_u / param->mw[l]);
   }
   mw = 1 / mw;
-  const auto gamma=cp_tot/cv;
-  zone->acoustic_speed(i,j,k)=std::sqrt(gamma*R_u*temperature/mw);
-  compute_transport_property(i,j,k,temperature,mw,cp,param,zone);
+  const real gamma = cp_tot / cv;
+  zone->acoustic_speed(i, j, k) = std::sqrt(gamma * R_u * temperature / mw);
+  compute_transport_property(i, j, k, temperature, mw, cp, param, zone);
   delete[] cp;
 #else
   constexpr real c_temp{gamma_air * R_u / mw_air};
@@ -202,5 +203,87 @@ __global__ void cfd::update_physical_properties(cfd::DZone *zone, cfd::DParamete
   zone->mul(i, j, k) = Sutherland(temperature);
   zone->conductivity(i, j, k) = zone->mul(i, j, k) * c_temp / (gamma_air - 1) / pr;
 #endif
-  zone->mach(i, j, k) = zone->vel(i, j, k) / zone->acoustic_speed(i,j,k);
+  zone->mach(i, j, k) = zone->vel(i, j, k) / zone->acoustic_speed(i, j, k);
+}
+
+
+__global__ void cfd::inner_communication(cfd::DZone *zone, cfd::DZone *tar_zone, const uint *n_point, integer i_face) {
+  uint n[3];
+  n[0] = blockIdx.x * blockDim.x + threadIdx.x;
+  n[1] = blockDim.y + blockIdx.y + threadIdx.y;
+  n[2] = blockIdx.z * blockDim.z + threadIdx.z;
+  if (n[0] >= n_point[0] || n[1] >= n_point[1] || n[2] >= n_point[2]) return;
+
+  integer idx[3], idx_tar[3];
+  const auto &f = zone->innerface[i_face];
+  for (integer i = 0; i < 3; ++i) {
+    auto d_idx = f.loop_dir[i] * (integer) (n[i]);
+    idx[i] = f.range_start[i] + d_idx;
+    idx_tar[i] = f.target_start[i] + f.target_loop_dir[i] * d_idx;
+  }
+
+  // The face direction: which of i(0)/j(1)/k(2) is the coincided face.
+  const auto face_dir{f.direction > 0 ? f.range_start[f.face] : f.range_end[f.face]};
+
+  if (idx[f.face] == face_dir) {
+    // If this is the corresponding face, then average the values from both blocks
+    for (integer l = 0; l < 6; ++l) {
+      const real ave =
+          0.5 * (tar_zone->bv(idx_tar[0], idx_tar[1], idx_tar[2], l) + zone->bv(idx[0], idx[1], idx[2], l));
+      zone->bv(idx[0], idx[1], idx[2], l) = ave;
+      tar_zone->bv(idx_tar[0], idx_tar[1], idx_tar[2], l) = ave;
+    }
+    for (int l = 0; l < zone->n_var; ++l) {
+      const real ave =
+          0.5 * (tar_zone->cv(idx_tar[0], idx_tar[1], idx_tar[2], l) + zone->cv(idx[0], idx[1], idx[2], l));
+      zone->cv(idx[0], idx[1], idx[2], l) = ave;
+      tar_zone->cv(idx_tar[0], idx_tar[1], idx_tar[2], l) = ave;
+    }
+#if MULTISPECIES == 1
+    for (int l = 0; l < zone->n_spec; ++l) {
+      real ave = 0.5 * (tar_zone->yk(idx_tar[0], idx_tar[1], idx_tar[2], l) + zone->yk(idx[0], idx[1], idx[2], l));
+      zone->yk(idx[0], idx[1], idx[2], l) = ave;
+      tar_zone->yk(idx_tar[0], idx_tar[1], idx_tar[2], l) = ave;
+    }
+#endif
+  } else {
+    // Else, get the inner value for this block's ghost grid
+    for (int l = 0; l < 5; ++l) {
+      zone->bv(idx[0], idx[1], idx[2], l) = tar_zone->bv(idx_tar[0], idx_tar[1], idx_tar[2], l);
+      zone->cv(idx[0], idx[1], idx[2], l) = tar_zone->cv(idx_tar[0], idx_tar[1], idx_tar[2], l);
+    }
+    zone->bv(idx[0], idx[1], idx[2], 5) = tar_zone->bv(idx_tar[0], idx_tar[1], idx_tar[2], 5);
+#if MULTISPECIES == 1
+    for (int l = 0; l < zone->n_spec; ++l) {
+      zone->yk(idx[0], idx[1], idx[2], l) = tar_zone->yk(idx_tar[0], idx_tar[1], idx_tar[2], l);
+      zone->cv(idx[0], idx[1], idx[2], l + 5) = tar_zone->cv(idx_tar[0], idx_tar[1], idx_tar[2], l + 5);
+    }
+#endif
+  }
+}
+
+__global__ void cfd::eliminate_k_gradient(cfd::DZone *zone) {
+  const integer ngg{zone->ngg}, mx{zone->mx}, my{zone->my};
+  integer i = (integer) (blockDim.x * blockIdx.x + threadIdx.x) - ngg;
+  integer j = (integer) (blockDim.y * blockIdx.y + threadIdx.y) - ngg;
+  if (i >= mx + ngg || j >= my + ngg) return;
+
+  auto &bv = zone->bv;
+#if MULTISPECIES == 1
+  auto &Y = zone->yk;
+  const integer n_spec = zone->n_spec;
+#endif
+
+  for (integer k = 1; k <= ngg; ++k) {
+    for (int l = 0; l < 6; ++l) {
+      bv(i, j, k, l) = bv(i, j, 0, l);
+      bv(i, j, -k, l) = bv(i, j, 0, l);
+    }
+#if MULTISPECIES == 1
+    for (int l = 0; l < n_spec; ++l) {
+      Y(i, j, k, l) = Y(i, j, 0, l);
+      Y(i, j, -k, l) = Y(i, j, 0, l);
+    }
+#endif
+  }
 }

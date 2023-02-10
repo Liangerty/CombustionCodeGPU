@@ -77,6 +77,7 @@ void cfd::Driver::initialize_computation() {
   }
 
   // Third, communicate values between processes
+  data_communication();
   // Currently not implemented, thus the current program can only be used on a single GPU
 
   if (myid == 0) {
@@ -99,8 +100,8 @@ void cfd::Driver::simulate() {
   if (steady) {
     steady_simulation();
   } else {
-    const auto temporal_scheme{parameter.get_int("temporal_scheme")};
-    switch (temporal_scheme) {
+    const auto temporal_tag{parameter.get_int("temporal_scheme")};
+    switch (temporal_tag) {
       case 11:
       case 12:
       default:fmt::print("Not implemented");
@@ -115,10 +116,17 @@ void cfd::Driver::steady_simulation() {
   integer total_step{parameter.get_int("total_step")};
   const integer n_block{mesh.n_block};
   const integer n_var{parameter.get_int("n_var")};
+  const integer ngg{mesh[0].ngg};
+  const integer ng_1=2*ngg-1;
 
   dim3 tpb{8, 8, 4};
   if (mesh.dimension == 2) {
     tpb = {16, 16, 1};
+  }
+  dim3* bpg=new dim3 [n_block];
+  for (integer b=0;b<n_block;++b){
+    const auto mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
+    bpg[b]={(mx - 1) / tpb.x + 1, (my - 1) / tpb.y + 1, (mz - 1) / tpb.z + 1};
   }
 
   //  const integer file_step{parameter.get_int("output_file")};
@@ -132,22 +140,72 @@ void cfd::Driver::steady_simulation() {
 
     // First, store the value of last step
     for (auto b = 0; b < n_block; ++b) {
-      const auto mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
-      dim3 bpg{(mx - 1) / tpb.x + 1, (my - 1) / tpb.y + 1, (mz - 1) / tpb.z + 1};
-      store_last_step<<<bpg, tpb>>>(field[b].d_ptr);
+      store_last_step<<<bpg[b], tpb>>>(field[b].d_ptr);
     }
 
     // Second, for each block, compute the residual dq
     for (auto b = 0; b < n_block; ++b) {
       compute_inviscid_flux(mesh[b], field[b].d_ptr, inviscid_scheme, param, n_var);
       compute_viscous_flux(mesh[b],field[b].d_ptr,viscous_scheme,param,n_var);
-      compute_local_time_step(mesh[b],field[b].d_ptr,param,temporal_scheme);
-      update_conservative_variables(mesh[b],field[b].d_ptr,param);
+
+      // compute local time step
+      local_time_step<<<bpg[b],tpb>>>(field[b].d_ptr,param,temporal_scheme);
+      // implicit treatment if needed
+
+      // update conservative and basic variables
+      update_cv_and_bv<<<bpg[b],tpb>>>(field[b].d_ptr,param);
+
+      // apply boundary conditions
+      bound_cond.apply_boundary_conditions(mesh,field,param);
     }
-    // Third, update conservative variables and apply boundary conditions.
+    // Third, transfer data between and within processes
+    data_communication();
+
+    if (mesh.dimension==2){
+      for (auto b = 0; b < n_block; ++b) {
+        const auto mx{mesh[b].mx}, my{mesh[b].my};
+        dim3 BPG{(mx+ng_1)/tpb.x+1,(my+ng_1)/tpb.y+1,1};
+        eliminate_k_gradient<<<BPG, tpb>>>(field[b].d_ptr);
+      }
+    }
+
+    // update physical properties such as Mach number, transport coefficients et, al.
+    for (auto b = 0; b < mesh.n_block; ++b) {
+      integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
+      dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
+      update_physical_properties<<<BPG, tpb>>>(field[b].d_ptr, param);
+    }
+
+    // Finally, test if the simulation reaches convergence state
 
     cudaDeviceSynchronize();
     fmt::print("Step {}\n",step);
+  }
+  delete[] bpg;
+}
+
+void cfd::Driver::data_communication() {
+  // -1 - inner faces
+  for (auto blk=0;blk<mesh.n_block;++blk){
+    auto& inF=mesh[blk].inner_face;
+    const auto n_innFace=inF.size();
+    auto v=field[blk].d_ptr;
+    const auto ngg = mesh[blk].ngg;
+    for (auto l=0;l<n_innFace;++l){
+      // reference to the current face
+      const auto& fc = mesh[blk].inner_face[l];
+      uint tpb[3], bpg[3], n_point[3];
+      for (size_t j=0;j<3;++j){
+        n_point[j]= abs(fc.range_start[j]-fc.range_end[j])+1;
+        tpb[j]=n_point[j]<=(2*ngg+1)?1:16;
+        bpg[j]=(n_point[j]-1)/tpb[j]+1;
+      }
+      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
+
+      // variables of the neighbor block
+      auto nv = field[fc.target_block].d_ptr;
+      inner_communication<<<BPG, TPB>>>(v, nv, n_point,l);
+    }
   }
 }
 
