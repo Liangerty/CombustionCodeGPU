@@ -10,7 +10,7 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter
     reconstruction{parameter.get_int("reconstruction")},
     limiter{parameter.get_int("limiter")},
     viscous_scheme{parameter.get_int("viscous_order")},
-    temporal_scheme{parameter.get_int("temporal_scheme")},
+    temporal_scheme{parameter.get_int("temporal_scheme")},output_screen(parameter.get_int("output_screen")),
     Pr(parameter.get_real("prandtl_number")), cfl(parameter.get_real("cfl")) {
 #if MULTISPECIES == 1
   const auto &spec = chem_data.spec;

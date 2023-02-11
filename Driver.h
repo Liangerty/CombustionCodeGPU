@@ -36,12 +36,19 @@ struct Driver {
   ViscousScheme **viscous_scheme = nullptr;
   TemporalScheme **temporal_scheme = nullptr;
 #endif
+  std::array<real ,4> res;
+  std::array<real ,4> res_scale;
 
 private:
   void data_communication();
   void steady_simulation();
+  real compute_residual(integer step);
+  void steady_screen_output(integer step, real err_max);
 };
 
 __global__ void setup_schemes(cfd::InviscidScheme **inviscid_scheme, cfd::ViscousScheme **viscous_scheme,
                               cfd::TemporalScheme **temporal_scheme, cfd::DParameter *param);
+
+template<integer N>
+__global__ void reduction_of_dbv_squared(real *arr_to_sum, integer size);
 }

@@ -22,6 +22,7 @@ struct DParameter {
   integer limiter=0;  // The tag for limiter method
   integer viscous_scheme=2; // The tag for viscous scheme. 0 - Inviscid, 2 - 2nd order central discretization
   integer temporal_scheme=1;  // The tag for temporal scheme. 1 - 1st order explicit Euler
+  integer output_screen=10; // determine the interval between screen outputs
   real Pr=0.72;
   real cfl=1;
 #if MULTISPECIES==1

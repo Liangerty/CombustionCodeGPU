@@ -8,6 +8,7 @@
 #include "fmt/core.h"
 #include "TimeAdvanceFunc.cuh"
 #include "TemporalScheme.cuh"
+#include <fstream>
 
 #if MULTISPECIES == 1
 #else
@@ -53,6 +54,7 @@ cfd::Driver::Driver(Parameter &parameter, Mesh &mesh_
 
   setup_schemes<<<1, 1>>>(inviscid_scheme, viscous_scheme, temporal_scheme, param);
 #endif
+//  cudaMalloc(&d_res,4*sizeof (real));
 }
 
 void cfd::Driver::initialize_computation() {
@@ -118,6 +120,7 @@ void cfd::Driver::steady_simulation() {
   const integer n_var{parameter.get_int("n_var")};
   const integer ngg{mesh[0].ngg};
   const integer ng_1=2*ngg-1;
+  const integer output_screen=parameter.get_int("output_screen");
 
   dim3 tpb{8, 8, 4};
   if (mesh.dimension == 2) {
@@ -170,13 +173,18 @@ void cfd::Driver::steady_simulation() {
     }
 
     // update physical properties such as Mach number, transport coefficients et, al.
-    for (auto b = 0; b < mesh.n_block; ++b) {
+    for (auto b = 0; b < n_block; ++b) {
       integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
       dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
       update_physical_properties<<<BPG, tpb>>>(field[b].d_ptr, param);
     }
 
     // Finally, test if the simulation reaches convergence state
+    if (step%output_screen==0) {
+      real err_max = compute_residual(step);
+      if (myid==0)
+        steady_screen_output(step,err_max);
+    }
 
     cudaDeviceSynchronize();
     fmt::print("Step {}\n",step);
@@ -207,6 +215,80 @@ void cfd::Driver::data_communication() {
       inner_communication<<<BPG, TPB>>>(v, nv, n_point,l);
     }
   }
+}
+
+real cfd::Driver::compute_residual(integer step) {
+  const integer n_block{mesh.n_block};
+  for (auto& e:res)
+    e=0;
+
+  dim3 tpb{8, 8, 4};
+  if (mesh.dimension == 2) {
+    tpb = {16, 16, 1};
+  }
+  for (integer b=0;b<n_block;++b){
+    const auto mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
+    dim3 bpg={(mx - 1) / tpb.x + 1, (my - 1) / tpb.y + 1, (mz - 1) / tpb.z + 1};
+    // compute the square of the difference of the basic variables
+    compute_square_of_dbv<<<bpg,tpb>>>(field[b].d_ptr);
+  }
+
+  constexpr integer TPB{128};
+  constexpr integer n_res_var{4};
+  real res_block[n_res_var];
+  int num_sms, num_blocks_per_sm;
+  cudaDeviceGetAttribute(&num_sms,cudaDevAttrMultiProcessorCount,0);
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&num_blocks_per_sm, reduction_of_dbv_squared<n_res_var>, TPB,TPB * sizeof(real) * n_res_var);
+  for (integer b=0;b<n_block;++b){
+    const auto mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
+    const integer size=mx*my*mz;
+    int n_blocks=std::min(num_blocks_per_sm*num_sms,(size+TPB-1)/TPB);
+    reduction_of_dbv_squared<n_res_var><<<n_blocks, TPB, TPB * sizeof(real) * n_res_var>>>(field[b].h_ptr->bv_last.data(), size);
+    reduction_of_dbv_squared<n_res_var><<<1, TPB, TPB * sizeof(real) * n_res_var>>>(field[b].h_ptr->bv_last.data(), size);
+    cudaMemcpy(res_block,field[b].h_ptr->bv_last.data(),n_res_var* sizeof(real),cudaMemcpyDeviceToHost);
+    for (integer l=0;l<n_res_var;++l)
+      res[l]+=res_block[l];
+  }
+
+  if (parameter.get_bool("parallel")){
+    // Parallel reduction
+  }
+  for (auto& e:res) {
+    e=std::sqrt(e/mesh.n_grid_total);
+  }
+
+  if (step == parameter.get_int("output_screen")) {
+    for (integer i = 0; i < n_res_var; ++i) {
+      res_scale[i] = res[i];
+      if (res_scale[i] < 1e-20)
+        res_scale[i] = 1e-20;
+    }
+  }
+
+  for (integer i = 0; i < 4; ++i)
+    res[i] /= res_scale[i];
+
+  // Find the maximum error of the 4 errors
+  real err_max = res[0];
+  for (integer i = 1; i < 4; ++i) {
+    if (res[i] > err_max)
+      err_max = res[i];
+  }
+  return err_max;
+}
+
+void cfd::Driver::steady_screen_output(integer step, real err_max) {
+//  time.get_elapsed_time();
+  std::ofstream history("history.dat", std::ios::app);
+  history << fmt::format("{}\t{}\n", step, err_max);
+  history.close();
+
+  fmt::print("\n{:>38}    converged to: {:>11.4e}\n", "rho", res[0]);
+  fmt::print("  n={:>8},                    V     converged to: {:>11.4e}   \n", step, res[1]);
+  fmt::print("  n={:>8},                    p     converged to: {:>11.4e}   \n", step, res[2]);
+  fmt::print("{:>38}    converged to: {:>11.4e}\n", "T ", res[3]);
+//  fmt::print("CPU time for this step is {:>16.8f}s\n", time.step_time);
+//  fmt::print("Total elapsed CPU time is {:>16.8f}s\n", time.elapsed_time);
 }
 
 __global__ void cfd::setup_schemes(cfd::InviscidScheme **inviscid_scheme, cfd::ViscousScheme **viscous_scheme,
@@ -242,5 +324,43 @@ __global__ void cfd::setup_schemes(cfd::InviscidScheme **inviscid_scheme, cfd::V
     default:
       *temporal_scheme=new SteadyTemporalScheme;
       printf("Temporal scheme: 1st order explicit Euler\n");
+  }
+}
+
+template<integer N>
+__global__ void cfd::reduction_of_dbv_squared(real *arr, integer size) {
+  integer i=blockDim.x*blockIdx.x+threadIdx.x;
+  if(i>=size)
+    return;
+  const integer t=threadIdx.x;
+  extern __shared__ real s[];
+  real inp[N];
+  memset(inp,0,N*sizeof(real));
+  //for(int idx=i;idx<size;idx+=blockDim.x*gridDim.x)
+  for(integer idx=i;idx<size;idx+=blockDim.x*gridDim.x){
+    inp[0]+=arr[idx * N];
+    inp[1]+=arr[idx * N + 1];
+    inp[2]+=arr[idx * N + 2];
+    inp[3]+=arr[idx * N + 3];
+  }
+  for (integer l=0;l<N;++l)
+    s[t*N+l]=inp[l];
+  __syncthreads();
+
+  for(int stride=blockDim.x/2, lst=blockDim.x&1;stride>=1;lst=stride&1,stride>>=1){
+    stride+=lst;
+    __syncthreads();
+    if(t<stride)//when t+stride is larger than #elements, there's no meaning of comparison. So when it happens, just keep the current value for parMax[t]. This always happens when an odd number of t satisfying the condition.
+      if(t+stride<size)
+        for (integer l=0;l<N;++l)
+          s[t*N+l]+=s[(t+stride)*N+l];
+    __syncthreads();
+  }
+
+  if(t==0){
+    arr[blockIdx.x*N]=s[0];
+    arr[blockIdx.x*N+1]=s[1];
+    arr[blockIdx.x*N+2]=s[2];
+    arr[blockIdx.x*N+3]=s[3];
   }
 }
