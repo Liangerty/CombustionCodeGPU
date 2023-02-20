@@ -23,6 +23,18 @@ __global__ void cfd::store_last_step(cfd::DZone *zone) {
   zone->bv_last(i, j, k, 3) = zone->bv(i, j, k, 5);
 }
 
+__global__ void cfd::set_dq_to_0(cfd::DZone* zone) {
+  const integer mx{zone->mx}, my{zone->my}, mz{zone->mz};
+  integer i = blockDim.x * blockIdx.x + threadIdx.x;
+  integer j = blockDim.y * blockIdx.y + threadIdx.y;
+  integer k = blockDim.z * blockIdx.z + threadIdx.z;
+  if (i >= mx || j >= my || k >= mz) return;
+
+  auto& dq = zone->dq;
+  const integer n_var = zone->n_var;
+  memset(&dq(i, j, k, 0), 0, n_var * sizeof(real));
+}
+
 void
 cfd::compute_inviscid_flux(const Block &block, cfd::DZone *zone, InviscidScheme **inviscid_scheme, DParameter *param,
                            const integer n_var) {
@@ -138,7 +150,6 @@ cfd::inviscid_flux_1d(cfd::DZone *zone, InviscidScheme **inviscid_scheme, intege
 void cfd::compute_viscous_flux(const cfd::Block &block, cfd::DZone *zone, cfd::ViscousScheme **viscous_scheme,
                                cfd::DParameter *param, integer n_var) {
   const integer extent[3]{block.mx, block.my, block.mz};
-  const integer ngg{block.ngg};
   const integer dim{extent[2] == 1 ? 2 : 3};
   constexpr integer block_dim=64;
 
@@ -148,12 +159,12 @@ void cfd::compute_viscous_flux(const cfd::Block &block, cfd::DZone *zone, cfd::V
   viscous_flux_fv<<<bpg, tpb, shared_mem>>>(zone, viscous_scheme, extent[0], param);
 
   tpb={1,block_dim,1};
-  bpg=(extent[0],(extent[1]-1)/(block_dim-1)+1,extent[2]);
+  bpg=dim3(extent[0],(extent[1]-1)/(block_dim-1)+1,extent[2]);
   viscous_flux_gv<<<bpg, tpb, shared_mem>>>(zone, viscous_scheme, extent[1], param);
 
   if (dim==3){
     tpb={1,1,block_dim};
-    bpg=(extent[0],extent[1],(extent[2]-1)/(block_dim-1)+1);
+    bpg= dim3(extent[0],extent[1],(extent[2]-1)/(block_dim-1)+1);
     viscous_flux_hv<<<bpg, tpb, shared_mem>>>(zone, viscous_scheme, extent[2], param);
   }
 }

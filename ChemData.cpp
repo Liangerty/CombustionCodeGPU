@@ -66,7 +66,7 @@ void cfd::Species::compute_cp(real temp, real *cp) const &{
     real tt{temp};
     if (temp < t_low[i]) {
       tt = t_low[i];
-      const real tt2{tt * tt}, tt3{t2 * tt}, tt4{t3 * tt};
+      const real tt2{tt * tt}, tt3{tt2 * tt}, tt4{tt3 * tt};
       auto &coeff = low_temp_coeff;
       cp[i] = coeff(i, 0) + coeff(i, 1) * tt + coeff(i, 2) * tt2 +
               coeff(i, 3) * tt3 + coeff(i, 4) * tt4;

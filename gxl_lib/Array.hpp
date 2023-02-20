@@ -19,7 +19,7 @@ private:
   T *val = nullptr;
 
 public:
-  __host__ __device__ Array3D() {}
+  Array3D() {}
 
   // Shallow copy constructor
   Array3D(const Array3D& b):ng(b.ng), n1(b.n1), n2(b.n2),n3(b.n3),disp1(b.disp1),disp2(b.disp2),dispt(b.dispt),sz(b.sz),val(b.val){}
@@ -36,9 +36,9 @@ public:
 //    cudaMalloc(&val, sz * sizeof(T));
 //  }
 
-//   void resize(integer dim1, integer dim2, integer dim3, integer n_ghost=0);
+//   void resize(int dim1, int dim2, int dim3, int n_ghost=0);
 
-  cudaError_t allocate_memory(integer dim1, integer dim2, integer dim3, integer n_ghost = 0);
+  cudaError_t allocate_memory(int dim1, int dim2, int dim3, int n_ghost = 0);
 
    __device__ T& operator()(const int i, const int j, const int k) {
      return val[i * disp1 + j * disp2 + k + dispt];
@@ -59,7 +59,7 @@ public:
 };
 
 // template <typename T>
-// inline void Array3D<T>::resize(integer dim1, integer dim2, integer dim3, integer n_ghost){
+// inline void Array3D<T>::resize(int dim1, int dim2, int dim3, int n_ghost){
 //   ng=n_ghost;
 //   n1=dim1;n2=dim2;n3=dim3;
 //   disp2=n3+2*ng;
@@ -70,7 +70,7 @@ public:
 // }
 
 template<typename T>
-inline cudaError_t Array3D<T>::allocate_memory(integer dim1, integer dim2, integer dim3, integer n_ghost) {
+inline cudaError_t Array3D<T>::allocate_memory(int dim1, int dim2, int dim3, int n_ghost) {
   ng = n_ghost;
   n1 = dim1;
   n2 = dim2;
@@ -93,17 +93,17 @@ inline cudaError_t Array3D<T>::allocate_memory(integer dim1, integer dim2, integ
 template<typename T>
 class VectorField3D {
 private:
-  integer ng = 0;
-  integer n1 = 0, n2 = 0, n3 = 0, n4 = 0;
-  integer disp1 = 0, disp2 = 0, dispt = 0;
+  int ng = 0;
+  int n1 = 0, n2 = 0, n3 = 0, n4 = 0;
+  int disp1 = 0, disp2 = 0, dispt = 0;
 
 public:
-  integer sz = 0;
+  int sz = 0;
   T *val = nullptr;
 
   VectorField3D() {}
 
-//  VectorField3D(integer dim1, integer dim2, integer dim3, integer dim4, integer n_ghost = 0) : ng(n_ghost), n1(dim1),
+//  VectorField3D(int dim1, int dim2, int dim3, int dim4, int n_ghost = 0) : ng(n_ghost), n1(dim1),
 //                                                                                               n2(dim2), n3(dim3),
 //                                                                                               n4(dim4), disp2{
 //          (n3 + 2 * ng) * n4}, disp1{(n2 + 2 * ng) * disp2}, dispt{(disp1 + disp2 + n4) * ng}, sz{(n1 + 2 * ng) *
@@ -114,7 +114,7 @@ public:
 //                                                                                                                   sizeof(T));
 //  }
 
-  cudaError_t allocate_memory(integer dim1, integer dim2, integer dim3, integer dim4, integer n_ghost = 0);
+  cudaError_t allocate_memory(int dim1, int dim2, int dim3, int dim4, int n_ghost = 0);
 
    __device__ T& operator()(const int i, const int j, const int k, const int l) {
      return val[i * disp1 + j * disp2 + k * n4 + dispt + l];
@@ -132,7 +132,7 @@ public:
 
 template<typename T>
 inline cudaError_t
-VectorField3D<T>::allocate_memory(integer dim1, integer dim2, integer dim3, integer dim4, integer n_ghost) {
+VectorField3D<T>::allocate_memory(int dim1, int dim2, int dim3, int dim4, int n_ghost) {
   ng = n_ghost;
   n1 = dim1;
   n2 = dim2;
@@ -424,6 +424,8 @@ public:
   void reserve(int ni, int nj, int nk, int nl, int ngg);
 
   void resize(int ni, int nj, int nk, int nl, int ngg);
+
+  auto size() { return data_.size(); }
 };
 
 template<typename T>

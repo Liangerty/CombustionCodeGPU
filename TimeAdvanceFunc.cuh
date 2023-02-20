@@ -1,6 +1,7 @@
 #pragma once
 #include "Define.h"
 #include "DParameter.h"
+#include <cuda_runtime.h>
 //#include "gxl_lib/Array.hpp"
 
 namespace cfd {
@@ -16,6 +17,9 @@ struct TemporalScheme;
 
 __global__ void store_last_step(DZone *zone);
 
+__global__ void set_dq_to_0(cfd::DZone* zone);
+
+class Field;
 void compute_inviscid_flux(const Block &block, cfd::DZone *zone, InviscidScheme **inviscid_scheme, DParameter *param,
                            integer n_var);
 

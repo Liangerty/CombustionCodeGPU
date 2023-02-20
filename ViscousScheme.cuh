@@ -8,7 +8,7 @@ struct DParameter;
 
 class ViscousScheme {
 public:
-  __device__ ViscousScheme()=default;
+  ViscousScheme()=default;
 
   __device__ virtual void compute_fv(integer idx[3], DZone *zone, real *fv, DParameter *param);
   __device__ virtual void compute_gv(integer idx[3], DZone *zone, real *gv, DParameter *param);

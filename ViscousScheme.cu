@@ -125,14 +125,14 @@ __device__ void SecOrdViscScheme::compute_gv(integer *idx, DZone *zone, real *gv
   const auto &m1 = zone->metric(i, j + 1, k);
 
   const real xi_x = 0.5 * (m(1, 1) + m1(1, 1));
-  const real xi_y = 0.5 * (m(1, 2) + m(1, 2));
-  const real xi_z = 0.5 * (m(1, 3) + m(1, 3));
-  const real eta_x = 0.5 * (m(2, 1) + m(2, 1));
-  const real eta_y = 0.5 * (m(2, 2) + m(2, 2));
-  const real eta_z = 0.5 * (m(2, 3) + m(2, 3));
-  const real zeta_x = 0.5 * (m(3, 1) + m(3, 1));
-  const real zeta_y = 0.5 * (m(3, 2) + m(3, 2));
-  const real zeta_z = 0.5 * (m(3, 3) + m(3, 3));
+  const real xi_y = 0.5 * (m(1, 2) + m1(1, 2));
+  const real xi_z = 0.5 * (m(1, 3) + m1(1, 3));
+  const real eta_x = 0.5 * (m(2, 1) + m1(2, 1));
+  const real eta_y = 0.5 * (m(2, 2) + m1(2, 2));
+  const real eta_z = 0.5 * (m(2, 3) + m1(2, 3));
+  const real zeta_x = 0.5 * (m(3, 1) + m1(3, 1));
+  const real zeta_y = 0.5 * (m(3, 2) + m1(3, 2));
+  const real zeta_z = 0.5 * (m(3, 3) + m1(3, 3));
 
   // 1st order partial derivative of velocity to computational coordinate
   const auto& pv=zone->bv;

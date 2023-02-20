@@ -79,14 +79,15 @@ AUSMP::compute_inviscid_flux(DZone *zone, real *pv, const integer tid, DParamete
   const real mass_flux_half = c * (rho_l * mach_pos + rho_r * mach_neg);
   const real coeff = mass_flux_half * grad_k_div_jac;
 
-  auto fci = &fc[tid];
+  integer n_var = zone->n_var;
+  auto fci = &fc[tid*n_var];
   if (mass_flux_half >= 0) {
     fci[0] = coeff;
     fci[1] = coeff * pv_l[1] + p_coeff * k1;
     fci[2] = coeff * pv_l[2] + p_coeff * k2;
     fci[3] = coeff * pv_l[3] + p_coeff * k3;
     fci[4] = coeff * (pv_l[5 + n_spec] + pv_l[4]) / pv_l[0];
-    for (int l = 5; l < zone->n_var; ++l) {
+    for (int l = 5; l < n_var; ++l) {
       fci[l] = coeff * pv_l[l];
     }
   } else {
@@ -95,7 +96,7 @@ AUSMP::compute_inviscid_flux(DZone *zone, real *pv, const integer tid, DParamete
     fci[2] = coeff * pv_r[2] + p_coeff * k2;
     fci[3] = coeff * pv_r[3] + p_coeff * k3;
     fci[4] = coeff * (pv_r[5 + n_spec] + pv_r[4]) / pv_r[0];
-    for (int l = 5; l < zone->n_var; ++l) {
+    for (int l = 5; l < n_var; ++l) {
       fci[l] = coeff * pv_r[l];
     }
   }

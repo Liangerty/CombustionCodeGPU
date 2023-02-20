@@ -232,8 +232,8 @@ void DBoundCond::link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) co
         auto &b = mesh[i].boundary[wall_info[l].boundary[m].y];
         for (int q = 0; q < 3; ++q) {
           if (q == b.face) continue;
-          b.range_start[i] += ngg;
-          b.range_end[i] -= ngg;
+          b.range_start[q] += ngg;
+          b.range_end[q] -= ngg;
         }
       }
     }

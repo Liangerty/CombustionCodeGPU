@@ -13,7 +13,7 @@ __device__ void
 Reconstruction::apply(real *pv, real *pv_l, real *pv_r, const integer idx_shared, const integer n_var) {
   // The variables that can be reconstructed directly are density, u, v, w, p, Y_k, the number of which is
   // equal to the number of conservative variables(n_var).
-  for (auto l = 0; l < n_var; +l) {
+  for (integer l = 0; l < n_var; ++l) {
     pv_l[l] = pv[idx_shared * n_var + l];
     pv_r[l] = pv[(idx_shared + 1) * n_var + l];
   }
@@ -60,7 +60,6 @@ reconstruction(real *pv, real *pv_l, real *pv_r, Reconstruction *&method, const 
   const real t_l = pv_l[4] / (pv_l[0] * R_u * mw_inv_l);
   const real t_r = pv_r[4] / (pv_r[0] * R_u * mw_inv_r);
 
-  real cv_l{0}, cv_r{0.0};
   real *mm = new real[4 * n_spec];
   real *hl = mm;
   real *hr = &mm[n_spec];

@@ -144,6 +144,7 @@ void cfd::Driver::steady_simulation() {
     // First, store the value of last step
     for (auto b = 0; b < n_block; ++b) {
       store_last_step<<<bpg[b], tpb>>>(field[b].d_ptr);
+      set_dq_to_0 <<<bpg[b], tpb >>> (field[b].d_ptr);
     }
 
     // Second, for each block, compute the residual dq
@@ -187,7 +188,7 @@ void cfd::Driver::steady_simulation() {
     }
 
     cudaDeviceSynchronize();
-    fmt::print("Step {}\n",step);
+//    fmt::print("Step {}\n",step);
   }
   delete[] bpg;
 }
@@ -244,7 +245,7 @@ real cfd::Driver::compute_residual(integer step) {
     const integer size=mx*my*mz;
     int n_blocks=std::min(num_blocks_per_sm*num_sms,(size+TPB-1)/TPB);
     reduction_of_dbv_squared<n_res_var><<<n_blocks, TPB, TPB * sizeof(real) * n_res_var>>>(field[b].h_ptr->bv_last.data(), size);
-    reduction_of_dbv_squared<n_res_var><<<1, TPB, TPB * sizeof(real) * n_res_var>>>(field[b].h_ptr->bv_last.data(), size);
+    reduction_of_dbv_squared<n_res_var><<<1, TPB, TPB * sizeof(real) * n_res_var>>>(field[b].h_ptr->bv_last.data(), n_blocks);
     cudaMemcpy(res_block,field[b].h_ptr->bv_last.data(),n_res_var* sizeof(real),cudaMemcpyDeviceToHost);
     for (integer l=0;l<n_res_var;++l)
       res[l]+=res_block[l];
@@ -284,8 +285,8 @@ void cfd::Driver::steady_screen_output(integer step, real err_max) {
   history.close();
 
   fmt::print("\n{:>38}    converged to: {:>11.4e}\n", "rho", res[0]);
-  fmt::print("  n={:>8},                    V     converged to: {:>11.4e}   \n", step, res[1]);
-  fmt::print("  n={:>8},                    p     converged to: {:>11.4e}   \n", step, res[2]);
+  fmt::print("  n={:>8},                       V     converged to: {:>11.4e}   \n", step, res[1]);
+  fmt::print("  n={:>8},                       p     converged to: {:>11.4e}   \n", step, res[2]);
   fmt::print("{:>38}    converged to: {:>11.4e}\n", "T ", res[3]);
 //  fmt::print("CPU time for this step is {:>16.8f}s\n", time.step_time);
 //  fmt::print("Total elapsed CPU time is {:>16.8f}s\n", time.elapsed_time);
@@ -330,10 +331,11 @@ __global__ void cfd::setup_schemes(cfd::InviscidScheme **inviscid_scheme, cfd::V
 template<integer N>
 __global__ void cfd::reduction_of_dbv_squared(real *arr, integer size) {
   integer i=blockDim.x*blockIdx.x+threadIdx.x;
+  const integer t = threadIdx.x;
+  extern __shared__ real s[];
+  memset(&s[t * N], 0, N * sizeof(real));
   if(i>=size)
     return;
-  const integer t=threadIdx.x;
-  extern __shared__ real s[];
   real inp[N];
   memset(inp,0,N*sizeof(real));
   //for(int idx=i;idx<size;idx+=blockDim.x*gridDim.x)

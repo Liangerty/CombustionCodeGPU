@@ -12,9 +12,7 @@ real cfd::Sutherland(real temperature) {
 #if MULTISPECIES == 1
 
 real cfd::compute_viscosity(real temperature, real mw_total, real const *Y, Species &spec) {
-  // 现在这种实现对于CPU来说还好，每个点串行实现，因此对于Species类中如vis_spec，partition_fun等临时变量的修改是串行的
-  // 但是对于GPU来讲，若干网格点并行，则会同时访问并修改这几个变量，造成的结果是未定义的。
-  // 最直接的做法仍然是每个网格点每步都分配相应的内存然后算完后再释放，这样会很浪费时间，等写到GPU部分时再想想怎么改进
+  // This method can only be used on CPU, while for GPU the allocation may be performed in every step
   for (int i = 0; i < spec.n_spec; ++i) {
     spec.x[i] = Y[i] * mw_total / spec.mw[i];
     const real t_dl{temperature * spec.LJ_potent_inv[i]};  // dimensionless temperature
@@ -47,15 +45,16 @@ __device__ void cfd::compute_transport_property(integer i, integer j, integer k,
   const auto n_spec{param->n_spec};
   const real* mw=param->mw;
   const auto yk=zone->yk;
-  real* X=new real [n_spec];
-  real* vis=new real [n_spec];
+  real* mem=new real[n_spec*3];
+  real* X=mem;
+  real* vis=&X[n_spec];
+  real* lambda=&vis[n_spec];
   for (int l = 0; l < n_spec; ++l) {
     X[l] = yk(i,j,k,l) * mw_total / mw[l];
     const real t_dl{temperature * param->LJ_potent_inv[l]}; //dimensionless temperature
     const real collision_integral{1.147 * std::pow(t_dl, -0.145) + std::pow(t_dl + 0.5, -2)};
     vis[l] = param->vis_coeff[l] * std::sqrt(temperature) / collision_integral;
   }
-  real* lambda=new real[n_spec];
   for (int l  = 0; l < n_spec; ++l)
     lambda[l] = vis[l] * (cp[l] + 1.25 * R_u / mw[l]);
 
@@ -92,9 +91,7 @@ __device__ void cfd::compute_transport_property(integer i, integer j, integer k,
       zone->rho_D(i,j,k,l)=(1-yk(i,j,k,l))*viscosity/((1-X[l])*sc);
   }
 
-  delete[] X;
-  delete[] vis;
-  delete[] lambda;
+  delete[] mem;
   partition_fun.deallocate_matrix();
 }
 #endif

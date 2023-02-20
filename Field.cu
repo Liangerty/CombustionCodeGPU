@@ -16,6 +16,11 @@ cfd::HZone::HZone(Parameter &parameter, const Block &block) {
   const integer n_spec{parameter.get_int("n_spec")};
   yk.resize(mx, my, mz, n_spec, ngg);
 #endif
+#ifdef DEBUG
+  dbv_squared.resize(mx, my, mz, 4, 0);
+  tempo_var.resize(mx, my, mz, 0);
+  dq.resize(mx, my, mz, n_var, 0);
+#endif
 }
 
 void cfd::HZone::initialize_basic_variables(const cfd::Parameter &parameter, const cfd::Block &block,
@@ -192,8 +197,8 @@ __global__ void cfd::update_physical_properties(cfd::DZone *zone, cfd::DParamete
     cv += yk(i, j, k, l) * (cp[l] - R_u / param->mw[l]);
   }
   mw = 1 / mw;
-  const real gamma = cp_tot / cv;
-  zone->acoustic_speed(i, j, k) = std::sqrt(gamma * R_u * temperature / mw);
+  zone->gamma(i, j, k) = cp_tot / cv;
+  zone->acoustic_speed(i, j, k) = std::sqrt(zone->gamma(i, j, k) * R_u * temperature / mw);
   compute_transport_property(i, j, k, temperature, mw, cp, param, zone);
   delete[] cp;
 #else

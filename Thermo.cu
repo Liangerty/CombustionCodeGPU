@@ -51,7 +51,7 @@ __device__ void cfd::compute_cp(real t, real *cp, cfd::DParameter *param) {
   for (auto i = 0; i < param->n_spec; ++i) {
     if (t < param->t_low[i]) {
       const real tt = param->t_low[i];
-      const real tt2 = tt * tt, tt3 = tt2 * tt, tt4 = tt3 * tt, tt5 = tt4 * tt;
+      const real tt2 = tt * tt, tt3 = tt2 * tt, tt4 = tt3 * tt;
       auto &coeff = param->low_temp_coeff;
       cp[i] = coeff(i, 0) + coeff(i, 1) * tt + coeff(i, 2) * tt2 + coeff(i, 3) * tt3 + coeff(i, 4) * tt4;
     } else {

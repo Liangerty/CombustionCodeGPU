@@ -9,7 +9,7 @@
 
 namespace cfd {
 struct DParameter;
-struct InviscidScheme;
+class InviscidScheme;
 struct ViscousScheme;
 struct TemporalScheme;
 
