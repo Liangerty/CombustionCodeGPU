@@ -6,6 +6,7 @@
 #include "Mesh.h"
 #include "Parameter.h"
 #include "BoundCond.cuh"
+#include "gxl_lib/Time.h"
 
 namespace cfd {
 struct DParameter;
@@ -25,7 +26,7 @@ struct Driver {
   void simulate();
 
   integer myid=0;
-//  integer step=0;
+  gxl::Time time;
   const Mesh &mesh;
   const Parameter& parameter;
   std::vector<Field> field; // The flowfield data of the simulation. Every block is a "Field" object

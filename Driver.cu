@@ -19,7 +19,7 @@ cfd::Driver::Driver(Parameter &parameter, Mesh &mesh_
 #if MULTISPECIES == 1
     , ChemData &chem_data
 #endif
-) : myid(parameter.get_int("myid")), mesh(mesh_), parameter(parameter), bound_cond() {
+) : myid(parameter.get_int("myid")), time(), mesh(mesh_), parameter(parameter), bound_cond() {
   // Allocate the memory for every block
   for (integer blk = 0; blk < mesh.n_block; ++blk) {
     field.emplace_back(parameter, mesh[blk]);
@@ -188,7 +188,6 @@ void cfd::Driver::steady_simulation() {
     }
 
     cudaDeviceSynchronize();
-//    fmt::print("Step {}\n",step);
   }
   delete[] bpg;
 }
@@ -279,7 +278,7 @@ real cfd::Driver::compute_residual(integer step) {
 }
 
 void cfd::Driver::steady_screen_output(integer step, real err_max) {
-//  time.get_elapsed_time();
+  time.get_elapsed_time();
   std::ofstream history("history.dat", std::ios::app);
   history << fmt::format("{}\t{}\n", step, err_max);
   history.close();
@@ -288,8 +287,8 @@ void cfd::Driver::steady_screen_output(integer step, real err_max) {
   fmt::print("  n={:>8},                       V     converged to: {:>11.4e}   \n", step, res[1]);
   fmt::print("  n={:>8},                       p     converged to: {:>11.4e}   \n", step, res[2]);
   fmt::print("{:>38}    converged to: {:>11.4e}\n", "T ", res[3]);
-//  fmt::print("CPU time for this step is {:>16.8f}s\n", time.step_time);
-//  fmt::print("Total elapsed CPU time is {:>16.8f}s\n", time.elapsed_time);
+  fmt::print("CPU time for this step is {:>16.8f}s\n", time.step_time);
+  fmt::print("Total elapsed CPU time is {:>16.8f}s\n", time.elapsed_time);
 }
 
 __global__ void cfd::setup_schemes(cfd::InviscidScheme **inviscid_scheme, cfd::ViscousScheme **viscous_scheme,

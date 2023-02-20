@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
+
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+  set(CMAKE_CUDA_ARCHITECTURES 75)
+endif()
+
 project(2_CLionGPU CUDA CXX)
 
 set(CMAKE_CUDA_STANDARD 17)
@@ -22,6 +27,7 @@ list(APPEND src_file
 
   gxl_lib/Array.hpp
   gxl_lib/MyString.cpp
+  gxl_lib/Time.cpp gxl_lib/Time.h
   )
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR})
