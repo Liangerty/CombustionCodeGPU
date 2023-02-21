@@ -24,7 +24,7 @@ struct HZone {
 #if MULTISPECIES == 1
   gxl::VectorField3D<real> yk;
 #endif
-#ifdef DEBUG
+#ifdef _DEBUG
   gxl::VectorField3D<real> dbv_squared;
   gxl::Array3D<real> tempo_var;
   gxl::VectorField3D<real> dq;

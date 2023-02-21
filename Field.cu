@@ -16,7 +16,7 @@ cfd::HZone::HZone(Parameter &parameter, const Block &block) {
   const integer n_spec{parameter.get_int("n_spec")};
   yk.resize(mx, my, mz, n_spec, ngg);
 #endif
-#ifdef DEBUG
+#ifdef _DEBUG
   dbv_squared.resize(mx, my, mz, 4, 0);
   tempo_var.resize(mx, my, mz, 0);
   dq.resize(mx, my, mz, n_var, 0);
@@ -160,8 +160,6 @@ __global__ void cfd::compute_cv_from_bv(cfd::DZone *zone, cfd::DParameter *param
   const real u = bv(i, j, k, 1);
   const real v = bv(i, j, k, 2);
   const real w = bv(i, j, k, 3);
-  const real p = bv(i, j, k, 4);
-  const real t = bv(i, j, k, 5);
 
   cv(i, j, k, 0) = rho;
   cv(i, j, k, 1) = rho * u;
