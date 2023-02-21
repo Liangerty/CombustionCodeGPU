@@ -14,5 +14,7 @@ __device__ void compute_enthalpy_and_cp(real t, real *enthalpy, real *cp, const 
 
 __device__ void compute_total_energy(integer i, integer j, integer k, DZone *zone, DParameter* param);
 
+#if MULTISPECIES==1
 __device__ void compute_temperature(int i, int j, int k, const DParameter* param, DZone *zone);
+#endif
 }

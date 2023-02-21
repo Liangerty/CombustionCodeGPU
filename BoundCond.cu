@@ -72,8 +72,8 @@ cfd::Inflow::Inflow(integer type_label, std::ifstream &file
   viscosity = cfd::Sutherland(temperature);
 
   real gamma{gamma_air}; // specific heat ratio
-  real cp{0}, cv{0};
 #if MULTISPECIES == 1
+  real cp{0}, cv{0};
   std::vector<real> cpi(n_spec, 0);
   spec.compute_cp(temperature, cpi.data());
   for (size_t i = 0; i < n_spec; ++i) {
@@ -312,7 +312,11 @@ void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> 
   }
 }
 
-void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Species &species) {
+void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field
+#if MULTISPECIES==1
+                                      , Species &species
+#endif
+) {
   std::vector<integer> bc_labels;
   // Count the number of distinct boundary conditions
   for (auto i = 0; i < mesh.n_block; i++) {

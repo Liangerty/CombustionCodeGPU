@@ -7,9 +7,9 @@
 #include <vector>
 #include "gxl_lib/Matrix.hpp"
 
-#if MULTISPECIES == 1
 namespace cfd {
 struct Species {
+#if MULTISPECIES == 1
   explicit Species(Parameter &parameter);
 
   void compute_cp(real temp, real *cp) const &;
@@ -42,17 +42,21 @@ private:
   void read_therm(Parameter &parameter);
 
   void read_tran(Parameter &parameter);
+#endif
 };
 
 struct Reaction {
+#if MULTISPECIES == 1
   explicit Reaction(Parameter &parameter);
+#endif
 };
 
 struct ChemData {
+#if MULTISPECIES == 1
   explicit ChemData(Parameter &parameter);
 
   Species spec;
   Reaction reac;
+#endif
 };
 }
-#endif

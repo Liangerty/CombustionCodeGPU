@@ -84,15 +84,17 @@ cfd::inviscid_flux_1d(cfd::DZone *zone, InviscidScheme **inviscid_scheme, intege
   real *fc = &jac[n_point];
 
 
-  const auto n_spec{zone->n_spec};
   //
   const integer i_shared = tid - 1 + ngg;
   for (auto l = 0; l < 5; ++l) { // 0-rho,1-u,2-v,3-w,4-p
     pv[i_shared * n_var + l] = zone->bv(idx[0], idx[1], idx[2], l);
   }
+#if MULTISPECIES==1
+  const auto n_spec{zone->n_spec};
   for (auto l = 0; l < n_spec; ++l) { // 5+l - Y_l
     pv[i_shared * n_var + 5 + l] = zone->yk(idx[0], idx[1], idx[2], l);
   }
+#endif
   for (auto l = 1; l < 4; ++l) {
     metric[i_shared * 3 + l - 1] = zone->metric(idx[0], idx[1], idx[2])(direction + 1, l);
   }
@@ -108,9 +110,11 @@ cfd::inviscid_flux_1d(cfd::DZone *zone, InviscidScheme **inviscid_scheme, intege
       for (auto l = 0; l < 5; ++l) { // 0-rho,1-u,2-v,3-w,4-p
         pv[ig_shared * n_var + l] = zone->bv(g_idx[0], g_idx[1], g_idx[2], l);
       }
+#if MULTISPECIES==1
       for (auto l = 0; l < n_spec; ++l) { // 5+l - Y_l
         pv[ig_shared * n_var + 5 + l] = zone->yk(g_idx[0], g_idx[1], g_idx[2], l);
       }
+#endif
       for (auto l = 1; l < 4; ++l) {
         metric[ig_shared * 3 + l - 1] = zone->metric(g_idx[0], g_idx[1], g_idx[2])(direction + 1, l);
       }
@@ -126,9 +130,11 @@ cfd::inviscid_flux_1d(cfd::DZone *zone, InviscidScheme **inviscid_scheme, intege
       for (auto l = 0; l < 5; ++l) { // 0-rho,1-u,2-v,3-w,4-p
         pv[ig_shared * n_var + l] = zone->bv(g_idx[0], g_idx[1], g_idx[2], l);
       }
+#if MULTISPECIES==1
       for (auto l = 0; l < n_spec; ++l) { // 5+l - Y_l
         pv[ig_shared * n_var + 5 + l] = zone->yk(g_idx[0], g_idx[1], g_idx[2], l);
       }
+#endif
       for (auto l = 1; l < 4; ++l) {
         metric[ig_shared * 3 + l - 1] = zone->metric(g_idx[0], g_idx[1], g_idx[2])(direction + 1, l);
       }

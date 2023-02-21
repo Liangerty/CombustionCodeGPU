@@ -1,6 +1,10 @@
 #include "InviscidScheme.cuh"
 #include "DParameter.h"
 #include "Field.h"
+#if MULTISPECIES==1
+#else
+#include "Constants.h"
+#endif
 
 namespace cfd {
 __device__ InviscidScheme::InviscidScheme(DParameter *param) {

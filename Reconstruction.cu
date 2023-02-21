@@ -47,11 +47,11 @@ __device__ void
 reconstruction(real *pv, real *pv_l, real *pv_r, Reconstruction *&method, const integer idx_shared, DZone *zone,
                DParameter *param) {
   const auto n_var = zone->n_var;
-  const auto n_spec = zone->n_spec;
   method->apply(pv, pv_l, pv_r, idx_shared, n_var);
   real el = 0.5 * (pv_l[1] * pv_l[1] + pv_l[2] * pv_l[2] + pv_l[3] * pv_l[3]);
   real er = 0.5 * (pv_r[1] * pv_r[1] + pv_r[2] * pv_r[2] + pv_r[3] * pv_r[3]);
 #if MULTISPECIES == 1
+  const auto n_spec = zone->n_spec;
   real mw_inv_l{0.0}, mw_inv_r{0.0};
   for (int l = 0; l < n_spec; ++l) {
     mw_inv_l += pv_l[5 + l] / param->mw[l];

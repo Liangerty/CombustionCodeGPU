@@ -25,8 +25,8 @@ struct DParameter {
   integer output_screen=10; // determine the interval between screen outputs
   real Pr=0.72;
   real cfl=1;
-#if MULTISPECIES==1
   integer n_spec=0;
+#if MULTISPECIES==1
   real* mw = nullptr;
   ggxl::MatrixDyn<real> high_temp_coeff, low_temp_coeff;
   real* t_low = nullptr, * t_mid = nullptr, * t_high = nullptr;

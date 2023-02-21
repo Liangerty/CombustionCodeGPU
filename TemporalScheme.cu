@@ -1,6 +1,10 @@
 #include "TemporalScheme.cuh"
 #include "DParameter.h"
 #include "Field.h"
+#if MULTISPECIES==1
+#else
+#include "Constants.h"
+#endif
 
 namespace cfd {
 __device__ void
@@ -27,7 +31,7 @@ SteadyTemporalScheme::compute_time_step(DZone *zone, integer i, integer j, integ
 #if MULTISPECIES==1
   const real coeff_1 = max(zone->gamma(i, j, k), 4.0 / 3.0);
 #else
-  constexpr real coeff_1 = max(gamma_air, 4.0 / 3.0);
+  const real coeff_1 = max(gamma_air, 4.0 / 3.0);
 #endif
   const real coeff_2 = zone->mul(i, j, k) / bv(i, j, k, 0) / param->Pr;
   real spectral_radius_viscous = grad_xi * grad_xi + grad_eta * grad_eta;

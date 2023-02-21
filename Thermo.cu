@@ -85,6 +85,7 @@ __device__ void cfd::compute_total_energy(integer i, integer j, integer k, cfd::
   vel(i, j, k) = sqrt(vel(i, j, k));
 }
 
+#if MULTISPECIES==1
 __device__ void cfd::compute_temperature(int i, int j, int k, const cfd::DParameter *param, cfd::DZone *zone) {
   const integer n_spec=param->n_spec;
   auto& Y=zone->yk;
@@ -122,3 +123,4 @@ __device__ void cfd::compute_temperature(int i, int j, int k, const cfd::DParame
   bv(i, j, k, 5) = t;
   bv(i, j, k, 4) = bv(i, j, k, 0) * bv(i, j, k, 5) * gas_const;
 }
+#endif

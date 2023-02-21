@@ -1,8 +1,6 @@
 #pragma once
 #include "Define.h"
-#if MULTISPECIES == 1
 #include "ChemData.h"
-#endif
 #ifdef CUDACC
 #include <cuda_runtime.h>
 #endif
