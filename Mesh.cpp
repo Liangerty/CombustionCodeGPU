@@ -521,7 +521,7 @@ cfd::Mesh::Mesh(Parameter &parameter) {
   //First read the grid points into memory
   dimension = parameter.get_int("dimension");
   read_grid(myid, ngg);
-  parameter.update_int_parameter("n_block",n_block);
+  parameter.update_parameter("n_block", n_block);
   if (myid == 0) {
     fmt::print("Problem dimension: {}\nTotal grid number: {}\n", dimension, n_grid_total);
   }
@@ -553,10 +553,6 @@ cfd::Mesh::Mesh(Parameter &parameter) {
   if (myid == 0) fmt::print("Finish computing metrics and jacobian values.\n");
 
   for (auto &b: block) b.trim_abundant_ghost_mesh();
-
-#ifdef GPU
-//  copy_mesh_to_device();
-#endif
 }
 
 cfd::Block &cfd::Mesh::operator[](const size_t i) {

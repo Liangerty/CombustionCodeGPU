@@ -4,13 +4,12 @@
 #include "Initialize.h"
 #include "InviscidScheme.cuh"
 #include "ViscousScheme.cuh"
-#include "Thermo.cuh"
 #include "fmt/core.h"
 #include "TimeAdvanceFunc.cuh"
 #include "TemporalScheme.cuh"
 #include <fstream>
-
 #if MULTISPECIES == 1
+#include "Thermo.cuh"
 #else
 #include "Constants.h"
 #endif

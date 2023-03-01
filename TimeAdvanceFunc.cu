@@ -5,10 +5,10 @@
 #include "ViscousScheme.cuh"
 #include "TemporalScheme.cuh"
 #if MULTISPECIES==1
+#include "Thermo.cuh"
 #else
 #include "Constants.h"
 #endif
-#include "Thermo.cuh"
 
 __global__ void cfd::store_last_step(cfd::DZone *zone) {
   const integer mx{zone->mx}, my{zone->my}, mz{zone->mz};
@@ -69,9 +69,9 @@ cfd::inviscid_flux_1d(cfd::DZone *zone, InviscidScheme **inviscid_scheme, intege
   const integer n_point = block_dim + 2 * ngg - 1;
 
   integer idx[3];
-  idx[0] = ((integer) blockDim.x - labels[0]) * blockIdx.x + threadIdx.x;
-  idx[1] = ((integer) blockDim.y - labels[1]) * blockIdx.y + threadIdx.y;
-  idx[2] = ((integer) blockDim.z - labels[2]) * blockIdx.z + threadIdx.z;
+  idx[0] = (integer)(( blockDim.x - labels[0]) * blockIdx.x + threadIdx.x);
+  idx[1] = (integer)(( blockDim.y - labels[1]) * blockIdx.y + threadIdx.y);
+  idx[2] = (integer)(( blockDim.z - labels[2]) * blockIdx.z + threadIdx.z);
   idx[direction] -= 1;
   if (idx[direction] >= max_extent) return;
 
@@ -202,7 +202,7 @@ __global__ void cfd::viscous_flux_gv(cfd::DZone *zone, cfd::ViscousScheme **visc
                                      cfd::DParameter *param) {
   integer idx[3];
   idx[0] = (integer) (blockDim.x * blockIdx.x + threadIdx.x);
-  idx[1] = ((integer) blockDim.y - 1) * blockIdx.y + threadIdx.y-1;
+  idx[1] = (integer)((blockDim.y - 1) * blockIdx.y + threadIdx.y)-1;
   idx[2] = (integer) (blockDim.z * blockIdx.z + threadIdx.z);
   if (idx[1] >= max_extent) return;
   const auto tid=threadIdx.y;
@@ -225,7 +225,7 @@ __global__ void cfd::viscous_flux_hv(cfd::DZone *zone, cfd::ViscousScheme **visc
   integer idx[3];
   idx[0] = (integer) (blockDim.x * blockIdx.x + threadIdx.x);
   idx[1] = (integer) (blockDim.y * blockIdx.y + threadIdx.y);
-  idx[2] = ((integer) blockDim.z - 1) * blockIdx.z + threadIdx.z-1;
+  idx[2] = (integer)((blockDim.z - 1) * blockIdx.z + threadIdx.z)-1;
   if (idx[2] >= max_extent) return;
   const auto tid=threadIdx.z;
   const auto n_var{zone->n_var};

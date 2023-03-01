@@ -32,8 +32,8 @@ cfd::Species::Species(Parameter &parameter) {
   line >> num_spec;
   set_nspec(num_spec, n_elem);
   gxl::getline(comb_mech, input);  //------------------
-  parameter.update_int_parameter("n_spec", num_spec);
-  parameter.update_int_parameter("n_var", parameter.get_int("n_var") + num_spec);
+  parameter.update_parameter("n_spec", num_spec);
+  parameter.update_parameter("n_var", parameter.get_int("n_var") + num_spec);
 
   counter = 0;
   while (gxl::getline_to_stream(comb_mech, input, line, gxl::Case::upper)) {

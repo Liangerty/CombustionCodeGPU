@@ -17,10 +17,10 @@ cfd::Parameter::Parameter(const std::string &filename) {
   file.close();
 }
 
-real cfd::Parameter::find_real(const std::string &name) const {
-  if (real_parameters.contains(name)) return real_parameters.at(name);
-  return 0;
-}
+//real cfd::Parameter::find_real(const std::string &name) const {
+//  if (real_parameters.contains(name)) return real_parameters.at(name);
+//  return 0;
+//}
 
 void cfd::Parameter::read_param_from_file() {
   for (auto &name: file_names) {
@@ -32,10 +32,10 @@ void cfd::Parameter::read_param_from_file() {
   int_parameters.emplace("ngg", 2);
   integer inviscid_tag = get_int("inviscid_scheme");
   if (inviscid_tag / 10 == 5) {
-    update_int_parameter("ngg", 3);
+    update_parameter("ngg", 3);
   }
 
-  update_int_parameter("n_var", 5);
+  update_parameter("n_var", 5);
 }
 
 void cfd::Parameter::read_one_file(std::ifstream &file) {
