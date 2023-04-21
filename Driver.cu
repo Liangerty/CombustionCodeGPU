@@ -123,7 +123,7 @@ void cfd::Driver::steady_simulation() {
 
   dim3 tpb{8, 8, 4};
   if (mesh.dimension == 2) {
-    tpb = {16, 16, 1};
+    tpb = {32, 16, 1};
   }
   dim3* bpg=new dim3 [n_block];
   for (integer b=0;b<n_block;++b){

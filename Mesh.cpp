@@ -269,7 +269,7 @@ void cfd::Block::compute_jac_metric(integer myid) {
   }
   // Start to compute boundaries, edges and corners. If negative value appears
   // here, just assign the value of the inner layer to it. First block:
-  // k=-1,-n_ghost No edges and corners
+  // k=-1,-ng No edges and corners
   for (integer i = 1; i < mx - 1; ++i) {
     for (integer j = 1; j < my - 1; ++j) {
       for (integer k = 0; k >= -ngg; --k) {
