@@ -6,6 +6,7 @@
 #include "gxl_lib/MyString.h"
 #include "Element.h"
 #include "Constants.h"
+#include <cmath>
 
 cfd::Species::Species(Parameter &parameter) {
   std::ifstream comb_mech("./input_files/" + parameter.get_string("mechanism_file"));

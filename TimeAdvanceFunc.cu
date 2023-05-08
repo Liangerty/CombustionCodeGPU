@@ -32,7 +32,7 @@ __global__ void cfd::set_dq_to_0(cfd::DZone* zone) {
 
   auto& dq = zone->dq;
   const integer n_var = zone->n_var;
-  for (size_t l = 0; l < n_var; l++)
+  for (integer l = 0; l < n_var; l++)
     dq(i, j, k, l) = 0;
 }
 
@@ -245,12 +245,43 @@ __global__ void cfd::viscous_flux_hv(cfd::DZone *zone, cfd::ViscousScheme **visc
 
 __global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param, TemporalScheme **temporal_scheme) {
   const integer extent[3]{zone->mx, zone->my, zone->mz};
-  const auto i=(integer)(blockDim.x*blockIdx.x+threadIdx.x);
-  const auto j=(integer)(blockDim.y*blockIdx.y+threadIdx.y);
-  const auto k=(integer)(blockDim.z*blockIdx.z+threadIdx.z);
+  const integer i=(blockDim.x*blockIdx.x+threadIdx.x);//(integer)
+  const integer j=(blockDim.y*blockIdx.y+threadIdx.y);//(integer)
+  const integer k=(blockDim.z*blockIdx.z+threadIdx.z);//(integer)
   if (i>=extent[0]||j>=extent[1]||k>=extent[2]) return;
 
-  (*temporal_scheme)->compute_time_step(zone, i, j, k, param);
+//  (*temporal_scheme)->compute_time_step(zone, i, j, k, param);
+  const auto& m{zone->metric(i, j, k)};
+  const auto& bv=zone->bv;
+  const integer dim{zone->mz == 1 ? 2 : 3};
+
+  const real grad_xi = std::sqrt(m(1, 1) * m(1, 1) + m(1, 2) * m(1, 2) + m(1, 3) * m(1, 3));
+  const real grad_eta = std::sqrt(m(2, 1) * m(2, 1) + m(2, 2) * m(2, 2) + m(2, 3) * m(2, 3));
+  const real grad_zeta = std::sqrt(m(3, 1) * m(3, 1) + m(3, 2) * m(3, 2) + m(3, 3) * m(3, 3));
+
+  const real u{bv(i, j, k, 1)}, v{bv(i, j, k, 2)}, w{bv(i, j, k, 3)};
+  const real U = u * m(1, 1) + v * m(1, 2) + w * m(1, 3);
+  const real V = u * m(2, 1) + v * m(2, 2) + w * m(2, 3);
+  const real W = u * m(3, 1) + v * m(3, 2) + w * m(3, 3);
+
+  const auto acoustic_speed = zone->acoustic_speed(i, j, k);
+  real spectral_radius_inviscid = std::abs(U) + std::abs(V) + acoustic_speed * (grad_xi + grad_eta);
+  if (dim == 3)
+    spectral_radius_inviscid += std::abs(W) + acoustic_speed * grad_zeta;
+
+  // Next, compute the viscous spectral radius
+#if MULTISPECIES==1
+  const real coeff_1 = max(zone->gamma(i, j, k), 4.0 / 3.0);
+#else
+  const real coeff_1 = max(gamma_air, 4.0 / 3.0);
+#endif
+  const real coeff_2 = zone->mul(i, j, k) / bv(i, j, k, 0) / param->Pr;
+  real spectral_radius_viscous = grad_xi * grad_xi + grad_eta * grad_eta;
+  if (dim == 3)
+    spectral_radius_viscous += grad_zeta * grad_zeta;
+  spectral_radius_viscous *= coeff_1 * coeff_2;
+
+  zone->dt_local(i, j, k) = param->cfl / (spectral_radius_inviscid + spectral_radius_viscous);
 }
 
 __global__ void cfd::update_cv_and_bv(cfd::DZone *zone, cfd::DParameter *param) {

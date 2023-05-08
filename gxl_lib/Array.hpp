@@ -17,11 +17,11 @@ namespace ggxl {
 template<typename T, Major major = Major::ColMajor>
 class Array3D {
 private:
-  int ng = 0;
-  int n1 = 0, n2 = 0, n3 = 0;
   int disp1 = 0, disp2 = 0, dispt = 0;
   int sz = 0;
   T *val = nullptr;
+  int ng = 0;
+  int n1 = 0, n2 = 0, n3 = 0;
 
 public:
 //  Array3D() {}
@@ -39,13 +39,13 @@ public:
       return val[i * disp1 + j * disp2 + k + dispt];
   }
 
-//  __device__ const T &operator()(const int i, const int j, const int k) const {
-//    if constexpr (major == Major::ColMajor) {
-//      return val[k * disp1 + j * disp2 + i + dispt];
-//    } else {
-//      return val[i * disp1 + j * disp2 + k + dispt];
-//    }
-//  }
+  __device__ const T &operator()(const int i, const int j, const int k) const {
+    if constexpr (major == Major::ColMajor) {
+      return val[k * disp1 + j * disp2 + i + dispt];
+    } else {
+      return val[i * disp1 + j * disp2 + k + dispt];
+    }
+  }
 
   T *data() { return val; }
 
@@ -75,13 +75,13 @@ inline cudaError_t Array3D<T, major>::allocate_memory(int dim1, int dim2, int di
 template<typename T, Major major = Major::ColMajor>
 class VectorField3D {
 private:
-  int ng = 0;
-  int n1 = 0, n2 = 0, n3 = 0, n4 = 0;
   int disp1 = 0, disp2 = 0, dispt = 0;
-
-public:
   int sz = 0;
   T *val = nullptr;
+  int ng = 0;
+  int n1 = 0, n2 = 0, n3 = 0, n4 = 0;
+
+public:
 
 //  VectorField3D() {}
 
@@ -105,6 +105,7 @@ public:
 
   T *data() { return val; }
 
+  auto size() { return sz; }
 //  const T *data() const { return val; }
 
 //   CUDA_CALLABLE_MEMBER ~VectorField3D() { /*cudaFree(val);*/ } // We do not deallocate the memory here because we first create a temporary VectorField on CPU with pointer to GPU memory, then we pass the handle to GPU by cudaMemcpy and the handle class is out of scope. If we deallocate the memory here, after giving out the handle, the GPU memory is also freed which is not wanted.

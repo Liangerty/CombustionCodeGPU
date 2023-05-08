@@ -111,7 +111,7 @@ public:
   }
 
 private:
-  int size_{M * N};
+//  int size_{M * N};
   int bias_{BaseNumber * (N + 1)};
   T data_[M * N]{};
 };

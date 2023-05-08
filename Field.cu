@@ -119,7 +119,7 @@ void cfd::Field::setup_device_memory(const Parameter &parameter, const Block &b)
   h_ptr->n_var = parameter.get_int("n_var");
   h_ptr->cv.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_var, h_ptr->ngg);
   h_ptr->bv.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 6, h_ptr->ngg);
-  cudaMemcpy(h_ptr->bv.data(), h_zone.bv.data(), sizeof(real) * h_ptr->bv.sz * 6, cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->bv.data(), h_zone.bv.data(), sizeof(real) * h_ptr->bv.size() * 6, cudaMemcpyHostToDevice);
   h_ptr->bv_last.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 4, 0);
   h_ptr->vel.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
   h_ptr->acoustic_speed.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
@@ -129,7 +129,7 @@ void cfd::Field::setup_device_memory(const Parameter &parameter, const Block &b)
 #if MULTISPECIES == 1
   h_ptr->n_spec = parameter.get_int("n_spec");
   h_ptr->yk.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_spec, h_ptr->ngg);
-  cudaMemcpy(h_ptr->yk.data(), h_zone.yk.data(), sizeof(real) * h_ptr->yk.sz * h_ptr->n_spec, cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->yk.data(), h_zone.yk.data(), sizeof(real) * h_ptr->yk.size() * h_ptr->n_spec, cudaMemcpyHostToDevice);
   h_ptr->rho_D.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_spec, h_ptr->ngg);
   h_ptr->gamma.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
 #endif // MULTISPECIES==1
