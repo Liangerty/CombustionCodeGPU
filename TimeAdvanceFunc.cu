@@ -32,7 +32,8 @@ __global__ void cfd::set_dq_to_0(cfd::DZone* zone) {
 
   auto& dq = zone->dq;
   const integer n_var = zone->n_var;
-  memset(&dq(i, j, k, 0), 0, n_var * sizeof(real));
+  for (size_t l = 0; l < n_var; l++)
+    dq(i, j, k, l) = 0;
 }
 
 void

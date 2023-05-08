@@ -25,10 +25,10 @@ struct Driver {
 
   void simulate();
 
-  integer myid=0;
+  integer myid = 0;
   gxl::Time time;
   const Mesh &mesh;
-  const Parameter& parameter;
+  const Parameter &parameter;
   std::vector<Field> field; // The flowfield data of the simulation. Every block is a "Field" object
 #ifdef GPU
   DParameter *param = nullptr; // The parameters used for GPU simulation, datas are stored on GPU while the pointer is on CPU
@@ -37,13 +37,16 @@ struct Driver {
   ViscousScheme **viscous_scheme = nullptr;
   TemporalScheme **temporal_scheme = nullptr;
 #endif
-  std::array<real ,4> res{1,1,1,1};
-  std::array<real ,4> res_scale{1,1,1,1};
+  std::array<real, 4> res{1, 1, 1, 1};
+  std::array<real, 4> res_scale{1, 1, 1, 1};
 
 private:
   void data_communication();
+
   void steady_simulation();
+
   real compute_residual(integer step);
+
   void steady_screen_output(integer step, real err_max);
 };
 
@@ -51,5 +54,5 @@ __global__ void setup_schemes(cfd::InviscidScheme **inviscid_scheme, cfd::Viscou
                               cfd::TemporalScheme **temporal_scheme, cfd::DParameter *param);
 
 template<integer N>
-__global__ void reduction_of_dbv_squared(real *arr_to_sum, integer size);
+__global__ void reduction_of_dv_squared(real *arr_to_sum, integer size);
 }
