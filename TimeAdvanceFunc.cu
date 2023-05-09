@@ -42,7 +42,7 @@ cfd::compute_inviscid_flux(const Block &block, cfd::DZone *zone, InviscidScheme 
   const integer extent[3]{block.mx, block.my, block.mz};
   const integer ngg{block.ngg};
   const integer dim{extent[2] == 1 ? 2 : 3};
-  constexpr integer block_dim=64;
+  constexpr integer block_dim=128;
   const integer n_computation_per_block=block_dim+2*ngg-1;
   const auto shared_mem=(block_dim*n_var // fc
                   +n_computation_per_block*(n_var+3+1))* sizeof(real); // pv[n_var]+metric[3]+jacobian

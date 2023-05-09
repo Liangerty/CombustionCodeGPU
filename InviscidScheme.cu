@@ -30,9 +30,10 @@ AUSMP::compute_inviscid_flux(DZone *zone, real *pv, const integer tid, DParamete
 #else
   constexpr integer n_reconstruction=6; // rho,u,v,w,p,E
 #endif
-  real* mem=new real [2*n_reconstruction];
-  auto pv_l = mem;
-  auto pv_r = &pv_l[n_reconstruction];
+  real pv_l[n_reconstruction], pv_r[n_reconstruction];
+//  real* mem=new real [2*n_reconstruction];
+//  auto pv_l = mem;
+//  auto pv_r = &pv_l[n_reconstruction];
   const integer i_shared = tid - 1 + ng;
   reconstruction(pv, pv_l, pv_r, reconstruction_method, i_shared, zone, param);
 
@@ -104,6 +105,6 @@ AUSMP::compute_inviscid_flux(DZone *zone, real *pv, const integer tid, DParamete
       fci[l] = coeff * pv_r[l];
     }
   }
-  delete[]mem;
+//  delete[]mem;
 }
 } // cfd
