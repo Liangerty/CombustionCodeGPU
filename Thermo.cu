@@ -105,11 +105,8 @@ __device__ void cfd::compute_temperature(int i, int j, int k, const cfd::DParame
   constexpr real eps{1e-3};
   integer iter = 0;
 
-  constexpr integer nsp=9;
-//  real h_i[nsp],cp_i[nsp];
-  real* mem=new real [2*n_spec];
-  real *h_i=mem;
-  real* cp_i=&h_i[n_spec];
+  constexpr integer nsp=60;
+  real h_i[nsp],cp_i[nsp];
   while (err > eps && iter++ < max_iter) {
     compute_enthalpy_and_cp(t,h_i,cp_i,param);
     real cp_tot{0}, h{0};
@@ -123,8 +120,7 @@ __device__ void cfd::compute_temperature(int i, int j, int k, const cfd::DParame
     err = std::abs(1 - t1 / t);
     t = t1;
   }
-  delete[]mem;
   bv(i, j, k, 5) = t;
-  bv(i, j, k, 4) = bv(i, j, k, 0) * bv(i, j, k, 5) * gas_const;
+  bv(i, j, k, 4) = bv(i, j, k, 0) * t * gas_const;
 }
 #endif

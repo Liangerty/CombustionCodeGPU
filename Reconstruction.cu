@@ -60,11 +60,8 @@ reconstruction(real *pv, real *pv_l, real *pv_r, Reconstruction *&method, const 
   const real t_l = pv_l[4] / (pv_l[0] * R_u * mw_inv_l);
   const real t_r = pv_r[4] / (pv_r[0] * R_u * mw_inv_r);
 
-  real *mm = new real[4 * n_spec];
-  real *hl = mm;
-  real *hr = &mm[n_spec];
-  real *cpl_i = &hr[n_spec];
-  real *cpr_i = &cpl_i[n_spec];
+  constexpr integer nsp=9;
+  real hl[nsp], hr[nsp], cpl_i[nsp], cpr_i[nsp];
   compute_enthalpy_and_cp(t_l, hl, cpl_i, param);
   compute_enthalpy_and_cp(t_r, hr, cpr_i, param);
   real cpl{0}, cpr{0}, cvl{0}, cvr{0};
@@ -81,7 +78,6 @@ reconstruction(real *pv, real *pv_l, real *pv_r, Reconstruction *&method, const 
 
   pv_l[6 + n_spec] = cpl / cvl; //specific heat ratio
   pv_r[6 + n_spec] = cpr / cvr;
-  delete[]mm;
 #else
   pv_l[5]=el*pv_l[0]+pv_l[4] / (gamma_air - 1);
   pv_r[5]=er*pv_r[0]+pv_r[4] / (gamma_air - 1);
