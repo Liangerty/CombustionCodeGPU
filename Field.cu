@@ -186,7 +186,8 @@ __global__ void cfd::update_physical_properties(cfd::DZone *zone, cfd::DParamete
   const integer n_spec{zone->n_spec};
   auto &yk = zone->yk;
   real mw{0}, cp_tot{0}, cv{0};
-  real *cp = new real[n_spec];
+  real cp[9];
+//  real *cp = new real[n_spec];
   compute_cp(temperature, cp, param);
   for (auto l = 0; l < n_spec; ++l) {
     mw += yk(i, j, k, l) / param->mw[l];
@@ -197,7 +198,7 @@ __global__ void cfd::update_physical_properties(cfd::DZone *zone, cfd::DParamete
   zone->gamma(i, j, k) = cp_tot / cv;
   zone->acoustic_speed(i, j, k) = std::sqrt(zone->gamma(i, j, k) * R_u * temperature / mw);
   compute_transport_property(i, j, k, temperature, mw, cp, param, zone);
-  delete[] cp;
+//  delete[] cp;
 #else
   constexpr real c_temp{gamma_air * R_u / mw_air};
   const real pr = param->Pr;

@@ -71,14 +71,15 @@ __device__ void cfd::compute_total_energy(integer i, integer j, integer k, cfd::
   vel(i, j, k) = bv(i, j, k, 1) * bv(i, j, k, 1) + bv(i, j, k, 2) * bv(i, j, k, 2) + bv(i, j, k, 3) * bv(i, j, k, 3);
   cv(i, j, k, 4) = 0.5 * bv(i, j, k, 0) * vel(i, j, k);
 #if MULTISPECIES == 1
-  real *enthalpy = new real[zone->n_spec];
+//  real *enthalpy = new real[zone->n_spec];
+  real enthalpy[9];
   compute_enthalpy(bv(i, j, k, 5), enthalpy, param);
   // Add species enthalpy together up to kinetic energy to get total enthalpy
   for (auto l = 0; l < zone->n_spec; l++) {
     cv(i, j, k, 4) += enthalpy[l] * cv(i, j, k, 5 + l);
   }
   cv(i, j, k, 4) -= bv(i, j, k, 4);  // (\rho e =\rho h - p)
-  delete[]enthalpy;
+//  delete[]enthalpy;
 #else
   cv(i, j, k, 4) += bv(i, j, k, 4) / (cfd::gamma_air - 1);
 #endif // MULTISPECIES==1
@@ -103,6 +104,9 @@ __device__ void cfd::compute_temperature(int i, int j, int k, const cfd::DParame
   constexpr integer max_iter{1000};
   constexpr real eps{1e-3};
   integer iter = 0;
+
+  constexpr integer nsp=9;
+//  real h_i[nsp],cp_i[nsp];
   real* mem=new real [2*n_spec];
   real *h_i=mem;
   real* cp_i=&h_i[n_spec];

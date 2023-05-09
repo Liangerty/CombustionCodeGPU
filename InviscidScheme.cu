@@ -26,7 +26,8 @@ AUSMP::compute_inviscid_flux(DZone *zone, real *pv, const integer tid, DParamete
                              real *jac) {
   const auto ng{zone->ngg};
 #if MULTISPECIES == 1
-  const auto n_reconstruction = zone->n_var + 2; // rho,u,v,w,p,Y_{1...Ns},E,gamma
+  const auto n_reconstruction = 16; // rho,u,v,w,p,Y_{1...Ns},E,gamma
+//  const auto n_reconstruction = zone->n_var + 2; // rho,u,v,w,p,Y_{1...Ns},E,gamma
 #else
   constexpr integer n_reconstruction=6; // rho,u,v,w,p,E
 #endif

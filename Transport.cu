@@ -45,39 +45,38 @@ __device__ void cfd::compute_transport_property(integer i, integer j, integer k,
   const auto n_spec{param->n_spec};
   const real* mw=param->mw;
   const auto yk=zone->yk;
-  real* mem=new real[n_spec*3];
-  real* X=mem;
-  real* vis=&X[n_spec];
-  real* lambda=&vis[n_spec];
+
+  constexpr integer nsp=9;
+  real X[nsp], vis[nsp];//, lambda[nsp];
+//  real* mem=new real[n_spec*3];
+//  real* X=mem;
+//  real* vis=&X[n_spec];
+//  real* lambda=&vis[n_spec];
   for (int l = 0; l < n_spec; ++l) {
     X[l] = yk(i,j,k,l) * mw_total / mw[l];
     const real t_dl{temperature * param->LJ_potent_inv[l]}; //dimensionless temperature
     const real collision_integral{1.147 * std::pow(t_dl, -0.145) + std::pow(t_dl + 0.5, -2)};
     vis[l] = param->vis_coeff[l] * std::sqrt(temperature) / collision_integral;
   }
-  for (int l  = 0; l < n_spec; ++l)
-    lambda[l] = vis[l] * (cp[l] + 1.25 * R_u / mw[l]);
+//  for (int l  = 0; l < n_spec; ++l)
+//    lambda[l] = vis[l] * (cp[l] + 1.25 * R_u / mw[l]);
 
-  ggxl::MatrixDyn<real> partition_fun(n_spec,n_spec);
-  for (int m = 0; m < n_spec; ++m) {
-    for (int n = 0; n < n_spec; ++n) {
-      if (m == n)
-        partition_fun(m, n) = 1.0;
-      else {
-        const real numerator{1 + std::sqrt(vis[m] / vis[n]) * param->WjDivWi_to_One4th(m, n)};
-        partition_fun(m, n) = numerator * numerator * param->sqrt_WiDivWjPl1Mul8(m, n);
-      }
-    }
-  }
   real viscosity    = 0;
   real conductivity = 0;
   for (int m = 0; m < n_spec; ++m) {
     real vis_temp{0};
-    for (int n = 0; n < n_spec; ++n)
-      vis_temp += partition_fun(m, n) * X[n];
+    for (int n = 0; n < n_spec; ++n) {
+      real partition_func{1.0};
+      if (m!=n) {
+        const real numerator{1 + std::sqrt(vis[m] / vis[n]) * param->WjDivWi_to_One4th(m, n)};
+        partition_func = numerator * numerator * param->sqrt_WiDivWjPl1Mul8(m, n);
+      }
+      vis_temp += partition_func * X[n];
+    }
     const real cond_temp = 1.065 * vis_temp - 0.065 * X[m];
     viscosity += vis[m] * X[m] / vis_temp;
-    conductivity += lambda[m] * X[m] / cond_temp;
+    const real lambda=vis[m] * (cp[m] + 1.25 * R_u / mw[m]);
+    conductivity += lambda * X[m] / cond_temp;
   }
   zone->mul(i,j,k)=viscosity;
   zone->conductivity(i,j,k)=conductivity;
@@ -85,14 +84,14 @@ __device__ void cfd::compute_transport_property(integer i, integer j, integer k,
   // The diffusivity is now computed via constant Schmidt number method
   const real sc{param->Sc};
   for (auto l=0;l<n_spec;++l){
-    if (std::abs(X[i]-1)<1e-3)
+    if (std::abs(X[l]-1)<1e-3)
       zone->rho_D(i,j,k,l)=viscosity/sc;
     else
       zone->rho_D(i,j,k,l)=(1-yk(i,j,k,l))*viscosity/((1-X[l])*sc);
   }
 
-  delete[] mem;
-  partition_fun.deallocate_matrix();
+//  delete[] mem;
+  //partition_fun.deallocate_matrix();
 }
 #endif
 

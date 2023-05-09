@@ -8,7 +8,7 @@ project(2_CLionGPU CUDA CXX)
 
 set(CMAKE_CUDA_STANDARD 17)
 
-add_compile_definitions(MULTISPECIES=0)
+add_compile_definitions(MULTISPECIES=1)
 add_compile_definitions(GPU)
 
 list(APPEND src_file

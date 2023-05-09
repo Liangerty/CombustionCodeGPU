@@ -82,12 +82,15 @@ __device__ void SecOrdViscScheme::compute_fv(integer idx[3], DZone *zone, real *
 #if MULTISPECIES==1
   const integer n_spec{zone->n_spec};
   const auto& y=zone->yk;
-  real* mem=new real[5*n_spec];
-  real* h=mem;
-  real* diffusivity=&h[n_spec];
-  real* y_x=&diffusivity[n_spec];
-  real* y_y=&y_x[n_spec];
-  real* y_z=&y_y[n_spec];
+
+  constexpr integer nsp=9;
+  real h[nsp], diffusivity[nsp], y_x[nsp], y_y[nsp], y_z[nsp];
+//  real* mem=new real[5*n_spec];
+//  real* h=mem;
+//  real* diffusivity=&h[n_spec];
+//  real* y_x=&diffusivity[n_spec];
+//  real* y_y=&y_x[n_spec];
+//  real* y_z=&y_y[n_spec];
 
   const real tm = 0.5 * (pv(i, j, k, 5) + pv(i + 1, j, k, 5));
   compute_enthalpy(tm, h, param);
@@ -116,7 +119,7 @@ __device__ void SecOrdViscScheme::compute_fv(integer idx[3], DZone *zone, real *
   for (int l = 0; l < n_spec; ++l) {
     fv[5 + l] = diffusivity[l] * (xi_x_div_jac * y_x[l] + xi_y_div_jac * y_y[l] + xi_z_div_jac * y_z[l]) - 0.5 * (y(i, j, k, l) + y(i + 1, j, k, l)) * (xi_x_div_jac * rho_uc + xi_y_div_jac * rho_vc + xi_z_div_jac * rho_wc);
   }
-  delete[] mem;
+//  delete[] mem;
 #endif
 }
 
@@ -194,12 +197,15 @@ __device__ void SecOrdViscScheme::compute_gv(integer *idx, DZone *zone, real *gv
 #if MULTISPECIES==1
   const integer n_spec{zone->n_spec};
   const auto& y=zone->yk;
-  real* mem=new real[5*n_spec];
-  real* h=mem;
-  real* diffusivity=&h[n_spec];
-  real* y_x=&diffusivity[n_spec];
-  real* y_y=&y_x[n_spec];
-  real* y_z=&y_y[n_spec];
+
+  constexpr integer nsp=9;
+  real h[nsp], diffusivity[nsp], y_x[nsp], y_y[nsp], y_z[nsp];
+//  real* mem=new real[5*n_spec];
+//  real* h=mem;
+//  real* diffusivity=&h[n_spec];
+//  real* y_x=&diffusivity[n_spec];
+//  real* y_y=&y_x[n_spec];
+//  real* y_z=&y_y[n_spec];
 
   const real tm = 0.5 * (pv(i, j, k, 5) + pv(i, j + 1, k, 5));
   compute_enthalpy(tm, h, param);
@@ -228,7 +234,7 @@ __device__ void SecOrdViscScheme::compute_gv(integer *idx, DZone *zone, real *gv
   for (int l = 0; l < n_spec; ++l) {
     gv[5 + l] = diffusivity[l] * (eta_x_div_jac * y_x[l] + eta_y_div_jac * y_y[l] + eta_z_div_jac * y_z[l]) - 0.5 * (y(i, j, k, l) + y(i, j + 1, k, l)) * (eta_x_div_jac * rho_uc + eta_y_div_jac * rho_vc + eta_z_div_jac * rho_wc);
   }
-  delete[] mem;
+//  delete[] mem;
 #endif
 }
 
@@ -306,12 +312,15 @@ __device__ void SecOrdViscScheme::compute_hv(integer *idx, DZone *zone, real *hv
 #if MULTISPECIES==1
   const integer n_spec{zone->n_spec};
   const auto& y=zone->yk;
-  real* mem=new real[5*n_spec];
-  real* h=mem;
-  real* diffusivity=&h[n_spec];
-  real* y_x=&diffusivity[n_spec];
-  real* y_y=&y_x[n_spec];
-  real* y_z=&y_y[n_spec];
+
+  constexpr integer nsp=9;
+  real h[nsp], diffusivity[nsp], y_x[nsp], y_y[nsp], y_z[nsp];
+//  real* mem=new real[5*n_spec];
+//  real* h=mem;
+//  real* diffusivity=&h[n_spec];
+//  real* y_x=&diffusivity[n_spec];
+//  real* y_y=&y_x[n_spec];
+//  real* y_z=&y_y[n_spec];
 
   const real tm = 0.5 * (pv(i, j, k, 5) + pv(i, j, k + 1, 5));
   compute_enthalpy(tm, h, param);
@@ -340,7 +349,7 @@ __device__ void SecOrdViscScheme::compute_hv(integer *idx, DZone *zone, real *hv
   for (int l = 0; l < n_spec; ++l) {
     hv[5 + l] = diffusivity[l] * (zeta_x_div_jac * y_x[l] + zeta_y_div_jac * y_y[l] + zeta_z_div_jac * y_z[l]) - 0.5 * (y(i, j, k, l) + y(i, j, k + 1, l)) * (zeta_x_div_jac * rho_uc + zeta_y_div_jac * rho_vc + zeta_z_div_jac * rho_wc);
   }
-  delete[] mem;
+//  delete[] mem;
 #endif
 }
 
