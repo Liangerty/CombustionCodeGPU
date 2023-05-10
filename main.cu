@@ -28,17 +28,13 @@ int main(int argc, char *argv[]) {
 
   cfd::Mesh mesh(parameter);
 
-#if MULTISPECIES == 1
   cfd::ChemData chem_data(parameter);
+#if MULTISPECIES == 1
 #else
   printf("Air computation.\n");
 #endif
 
-  cfd::Driver driver(parameter, mesh
-#if MULTISPECIES == 1
-      , chem_data
-#endif
-  );
+  cfd::Driver driver(parameter, mesh, chem_data);
 
   driver.initialize_computation();
 

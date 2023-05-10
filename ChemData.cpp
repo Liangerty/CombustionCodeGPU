@@ -7,8 +7,11 @@
 #include "Element.h"
 #include "Constants.h"
 #include <cmath>
+#endif
 
 cfd::Species::Species(Parameter &parameter) {
+  parameter.update_parameter("n_spec", 0);
+#if MULTISPECIES == 1
   std::ifstream comb_mech("./input_files/" + parameter.get_string("mechanism_file"));
   std::string input{}, key{};
   gxl::getline(comb_mech, input);  // Elements
@@ -59,8 +62,9 @@ cfd::Species::Species(Parameter &parameter) {
     }
   }
   fmt::print("\n");
+#endif
 }
-
+#if MULTISPECIES==1
 void cfd::Species::compute_cp(real temp, real *cp) const &{
   const real t2{temp * temp}, t3{t2 * temp}, t4{t3 * temp};
   for (int i = 0; i < n_spec; ++i) {
@@ -260,9 +264,8 @@ void cfd::Species::read_tran(Parameter &parameter) {
     }
   }
 }
-
+#endif
 cfd::Reaction::Reaction(Parameter &parameter) {}
 
 cfd::ChemData::ChemData(Parameter &parameter) : spec(parameter), reac(parameter) {}
 
-#endif

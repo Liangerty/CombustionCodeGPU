@@ -98,7 +98,7 @@ void cfd::initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vec
 
   // Start to initialize
   for (int blk = 0; blk < mesh.n_block; ++blk) {
-    field[blk].initialize_basic_variables(parameter, mesh[blk], groups_inflow, xs, xe, ys, ye, zs, ze);
+    field[blk].initialize_basic_variables(parameter, groups_inflow, xs, xe, ys, ye, zs, ze);
   }
 
 

@@ -9,15 +9,15 @@
 
 namespace cfd {
 struct Species {
-#if MULTISPECIES == 1
   explicit Species(Parameter &parameter);
+  integer n_spec{0};  // number of species
+  std::map<std::string, integer> spec_list; // species list
+#if MULTISPECIES == 1
 
   void compute_cp(real temp, real *cp) const &;
 
   // The properties of the species. Some previously private derived variables will appear in the corresponding function classes.
-  integer n_spec{1};  // number of species
   std::map<std::string, integer> elem_list; // element list
-  std::map<std::string, integer> spec_list; // species list
   gxl::MatrixDyn<integer> elem_comp;  // the element composition of the species
   std::vector<real> mw; // the array of molecular weights
   // Thermodynamic properties
@@ -46,17 +46,13 @@ private:
 };
 
 struct Reaction {
-#if MULTISPECIES == 1
   explicit Reaction(Parameter &parameter);
-#endif
 };
 
 struct ChemData {
-#if MULTISPECIES == 1
   explicit ChemData(Parameter &parameter);
 
   Species spec;
   Reaction reac;
-#endif
 };
 }

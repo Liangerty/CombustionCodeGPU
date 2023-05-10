@@ -65,20 +65,24 @@ struct DZone {
 #endif
 
 struct Field {
-  Field(Parameter &parameter, const Block &block);
+  Field(Parameter &parameter, const Block &block_in);
 
-  void initialize_basic_variables(const Parameter &parameter, const Block &block, const std::vector<Inflow> &inflows,
+  void initialize_basic_variables(const Parameter &parameter, const std::vector<Inflow> &inflows,
                                   const std::vector<real> &xs, const std::vector<real> &xe, const std::vector<real> &ys,
                                   const std::vector<real> &ye, const std::vector<real> &zs,
                                   const std::vector<real> &ze);
 
-  void setup_device_memory(const Parameter &parameter, const Block &block);
+  void setup_device_memory(const Parameter &parameter);
+
+  void copy_data_from_device();
 
   HZone h_zone;
 #ifdef GPU
   DZone *d_ptr = nullptr;
   DZone *h_ptr = nullptr;
 #endif
+  const Block& block;
+  integer n_spec=0;
 };
 
 struct DParameter;

@@ -7,6 +7,7 @@
 #include "Parameter.h"
 #include "BoundCond.cuh"
 #include "gxl_lib/Time.h"
+#include "Output.h"
 
 namespace cfd {
 struct DParameter;
@@ -15,11 +16,7 @@ struct ViscousScheme;
 struct TemporalScheme;
 
 struct Driver {
-  Driver(Parameter &parameter, Mesh &mesh_
-#if MULTISPECIES == 1
-      , ChemData &chem_data
-#endif
-  );
+  Driver(Parameter &parameter, Mesh &mesh_, ChemData &chem_data);
 
   void initialize_computation();
 
@@ -39,6 +36,7 @@ struct Driver {
 #endif
   std::array<real, 4> res{1, 1, 1, 1};
   std::array<real, 4> res_scale{1, 1, 1, 1};
+  Output output;
 
 private:
   void data_communication();

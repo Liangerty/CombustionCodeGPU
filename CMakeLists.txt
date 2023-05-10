@@ -29,6 +29,7 @@ list(APPEND src_file
   Initialize.h Initialize.cu InviscidScheme.cu InviscidScheme.cuh
   Limiter.cuh
   main.cu Mesh.h Mesh.cpp
+  Output.cu Output.h
   Parallel.h Parallel.cpp Parameter.h Parameter.cpp
   Reconstruction.cu Reconstruction.cuh
   TemporalScheme.cu TemporalScheme.cuh Thermo.cuh Thermo.cu TimeAdvanceFunc.cu TimeAdvanceFunc.cuh Transport.cuh Transport.cu

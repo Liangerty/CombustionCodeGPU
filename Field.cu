@@ -75,10 +75,10 @@ void cfd::HZone::initialize_basic_variables(const cfd::Parameter &parameter, con
   }
 }
 
-cfd::Field::Field(Parameter &parameter, const Block &block)
-    : h_zone(parameter, block) {}
+cfd::Field::Field(Parameter &parameter, const Block &block_in)
+    : h_zone(parameter, block_in), block{block_in}, n_spec(parameter.get_int("n_spec")) {}
 
-void cfd::Field::initialize_basic_variables(const cfd::Parameter &parameter, const cfd::Block &block,
+void cfd::Field::initialize_basic_variables(const cfd::Parameter &parameter,
                                             const std::vector<Inflow> &inflows, const std::vector<real> &xs,
                                             const std::vector<real> &xe, const std::vector<real> &ys,
                                             const std::vector<real> &ye, const std::vector<real> &zs,
@@ -86,34 +86,34 @@ void cfd::Field::initialize_basic_variables(const cfd::Parameter &parameter, con
   h_zone.initialize_basic_variables(parameter, block, inflows, xs, xe, ys, ye, zs, ze);
 }
 
-void cfd::Field::setup_device_memory(const Parameter &parameter, const Block &b) {
+void cfd::Field::setup_device_memory(const Parameter &parameter) {
   h_ptr = new DZone;
-  h_ptr->mx = b.mx, h_ptr->my = b.my, h_ptr->mz = b.mz, h_ptr->ngg = b.ngg;
+  h_ptr->mx = block.mx, h_ptr->my = block.my, h_ptr->mz = block.mz, h_ptr->ngg = block.ngg;
 
   h_ptr->x.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  cudaMemcpy(h_ptr->x.data(), b.x.data(), sizeof(real) * h_ptr->x.size(), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->x.data(), block.x.data(), sizeof(real) * h_ptr->x.size(), cudaMemcpyHostToDevice);
   h_ptr->y.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  cudaMemcpy(h_ptr->y.data(), b.y.data(), sizeof(real) * h_ptr->y.size(), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->y.data(), block.y.data(), sizeof(real) * h_ptr->y.size(), cudaMemcpyHostToDevice);
   h_ptr->z.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  cudaMemcpy(h_ptr->z.data(), b.z.data(), sizeof(real) * h_ptr->z.size(), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->z.data(), block.z.data(), sizeof(real) * h_ptr->z.size(), cudaMemcpyHostToDevice);
 
-  auto n_bound{b.boundary.size()};
-  auto n_inner{b.inner_face.size()};
-  auto n_par{b.parallel_face.size()};
+  auto n_bound{block.boundary.size()};
+  auto n_inner{block.inner_face.size()};
+  auto n_par{block.parallel_face.size()};
   auto mem_sz = sizeof(Boundary) * n_bound;
   cudaMalloc(&h_ptr->boundary, mem_sz);
-  cudaMemcpy(h_ptr->boundary, b.boundary.data(), mem_sz, cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->boundary, block.boundary.data(), mem_sz, cudaMemcpyHostToDevice);
   mem_sz = sizeof(InnerFace) * n_inner;
   cudaMalloc(&h_ptr->innerface, mem_sz);
-  cudaMemcpy(h_ptr->innerface, b.inner_face.data(), mem_sz, cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->innerface, block.inner_face.data(), mem_sz, cudaMemcpyHostToDevice);
   mem_sz = sizeof(ParallelFace) * n_par;
   cudaMalloc(&h_ptr->parface, mem_sz);
-  cudaMemcpy(h_ptr->parface, b.parallel_face.data(), mem_sz, cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->parface, block.parallel_face.data(), mem_sz, cudaMemcpyHostToDevice);
 
   h_ptr->jac.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  cudaMemcpy(h_ptr->jac.data(), b.jacobian.data(), sizeof(real) * h_ptr->jac.size(), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_ptr->jac.data(), block.jacobian.data(), sizeof(real) * h_ptr->jac.size(), cudaMemcpyHostToDevice);
   h_ptr->metric.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  cudaMemcpy(h_ptr->metric.data(), b.metric.data(), sizeof(gxl::Matrix<real, 3, 3, 1>) * h_ptr->metric.size(),
+  cudaMemcpy(h_ptr->metric.data(), block.metric.data(), sizeof(gxl::Matrix<real, 3, 3, 1>) * h_ptr->metric.size(),
              cudaMemcpyHostToDevice);
 
   h_ptr->n_var = parameter.get_int("n_var");
@@ -144,6 +144,16 @@ void cfd::Field::setup_device_memory(const Parameter &parameter, const Block &b)
 
   cudaMalloc(&d_ptr, sizeof(DZone));
   cudaMemcpy(d_ptr, h_ptr, sizeof(DZone), cudaMemcpyHostToDevice);
+}
+
+void cfd::Field::copy_data_from_device() {
+  const auto size=(block.mx+2*block.ngg)*(block.my+2*block.ngg)*(block.mz+2*block.ngg);
+
+  cudaMemcpy(h_zone.bv.data(),h_ptr->bv.data(),6*size*sizeof(real),cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_zone.mach.data(),h_ptr->mach.data(),size*sizeof(real),cudaMemcpyDeviceToHost);
+#if MULTISPECIES==1
+  cudaMemcpy(h_zone.yk.data(),h_ptr->yk.data(),n_spec*size*sizeof(real),cudaMemcpyDeviceToHost);
+#endif
 }
 
 __global__ void cfd::compute_cv_from_bv(cfd::DZone *zone, cfd::DParameter *param) {

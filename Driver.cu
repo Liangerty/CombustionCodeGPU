@@ -9,16 +9,18 @@
 #include "TemporalScheme.cuh"
 #include <fstream>
 #include "Parallel.h"
+#include "Output.h"
+
 #if MULTISPECIES == 1
 #else
 #include "Constants.h"
 #endif
 
-cfd::Driver::Driver(Parameter &parameter, Mesh &mesh_
-#if MULTISPECIES == 1
-    , ChemData &chem_data
-#endif
-) : myid(parameter.get_int("myid")), time(), mesh(mesh_), parameter(parameter), bound_cond() {
+cfd::Driver::Driver(Parameter &parameter, Mesh &mesh_, ChemData &chem_data) : myid(parameter.get_int("myid")), time(),
+                                                                              mesh(mesh_), parameter(parameter),
+                                                                              bound_cond(),
+                                                                              output{myid, mesh, field, parameter,
+                                                                                     chem_data.spec} {
   // Allocate the memory for every block
   for (integer blk = 0; blk < mesh.n_block; ++blk) {
     field.emplace_back(parameter, mesh[blk]);
@@ -40,7 +42,7 @@ cfd::Driver::Driver(Parameter &parameter, Mesh &mesh_
   cudaMalloc(&param, sizeof(DParameter));
   cudaMemcpy(param, &d_param, sizeof(DParameter), cudaMemcpyHostToDevice);
   for (integer blk = 0; blk < mesh.n_block; ++blk) {
-    field[blk].setup_device_memory(parameter, mesh[blk]);
+    field[blk].setup_device_memory(parameter);
   }
   bound_cond.initialize_bc_on_GPU(mesh_, field
 #if MULTISPECIES == 1
@@ -120,6 +122,7 @@ void cfd::Driver::steady_simulation() {
   const integer ngg{mesh[0].ngg};
   const integer ng_1 = 2 * ngg - 1;
   const integer output_screen = parameter.get_int("output_screen");
+  const integer output_file = parameter.get_int("output_file");
 
   dim3 tpb{8, 8, 4};
   if (mesh.dimension == 2) {
@@ -140,9 +143,11 @@ void cfd::Driver::steady_simulation() {
 
     // Start a single iteration
     // First, store the value of last step
-    if (step % output_screen == 0)
-      for (auto b = 0; b < n_block; ++b)
+    if (step % output_screen == 0) {
+      for (auto b = 0; b < n_block; ++b) {
         store_last_step <<<bpg[b], tpb >>>(field[b].d_ptr);
+      }
+    }
 
     for (auto b = 0; b < n_block; ++b) {
       set_dq_to_0 <<<bpg[b], tpb >>>(field[b].d_ptr);
@@ -182,12 +187,15 @@ void cfd::Driver::steady_simulation() {
     // Finally, test if the simulation reaches convergence state
     if (step % output_screen == 0) {
       real err_max = compute_residual(step);
-      converged=err_max<parameter.get_real("convergence_criteria")? true: false;
-      if (myid == 0)
+      converged = err_max < parameter.get_real("convergence_criteria") ? true : false;
+      if (myid == 0) {
         steady_screen_output(step, err_max);
+      }
     }
-
     cudaDeviceSynchronize();
+    if (step % output_file == 0) {
+      output.print_field();
+    }
   }
   delete[] bpg;
 }
@@ -219,8 +227,9 @@ void cfd::Driver::data_communication() {
 
 real cfd::Driver::compute_residual(integer step) {
   const integer n_block{mesh.n_block};
-  for (auto &e: res)
+  for (auto &e: res) {
     e = 0;
+  }
 
   dim3 tpb{8, 8, 4};
   if (mesh.dimension == 2) {
@@ -249,36 +258,41 @@ real cfd::Driver::compute_residual(integer step) {
     reduction_of_dv_squared<n_res_var> <<<1, TPB, TPB * sizeof(real) * n_res_var >>>(field[b].h_ptr->bv_last.data(),
                                                                                      n_blocks);
     cudaMemcpy(res_block, field[b].h_ptr->bv_last.data(), n_res_var * sizeof(real), cudaMemcpyDeviceToHost);
-    for (integer l = 0; l < n_res_var; ++l)
+    for (integer l = 0; l < n_res_var; ++l) {
       res[l] += res_block[l];
+    }
   }
 
   if (parameter.get_bool("parallel")) {
     // Parallel reduction
   }
-  for (auto &e: res)
+  for (auto &e: res) {
     e = std::sqrt(e / mesh.n_grid_total);
+  }
 
   if (step == parameter.get_int("output_screen")) {
     for (integer i = 0; i < n_res_var; ++i) {
       res_scale[i] = res[i];
-      if (res_scale[i] < 1e-20)
+      if (res_scale[i] < 1e-20) {
         res_scale[i] = 1e-20;
+      }
     }
   }
 
-  for (integer i = 0; i < 4; ++i)
+  for (integer i = 0; i < 4; ++i) {
     res[i] /= res_scale[i];
+  }
 
   // Find the maximum error of the 4 errors
   real err_max = res[0];
   for (integer i = 1; i < 4; ++i) {
-    if (res[i] > err_max)
+    if (res[i] > err_max) {
       err_max = res[i];
+    }
   }
 
-  if (myid==0){
-    if (isnan(err_max)){
+  if (myid == 0) {
+    if (isnan(err_max)) {
       printf("Nan occured in step %d. Stop simulation.\n", step);
       cfd::MpiParallel::exit();
     }
@@ -340,8 +354,9 @@ __global__ void cfd::reduction_of_dv_squared(real *arr, integer size) {
   const integer t = threadIdx.x;
   extern __shared__ real s[];
   memset(&s[t * N], 0, N * sizeof(real));
-  if (i >= size)
+  if (i >= size) {
     return;
+  }
   real inp[N];
   memset(inp, 0, N * sizeof(real));
   for (integer idx = i; idx < size; idx += blockDim.x * gridDim.x) {
@@ -350,17 +365,20 @@ __global__ void cfd::reduction_of_dv_squared(real *arr, integer size) {
     inp[2] += arr[idx + size * 2];
     inp[3] += arr[idx + size * 3];
   }
-  for (integer l = 0; l < N; ++l)
+  for (integer l = 0; l < N; ++l) {
     s[t * N + l] = inp[l];
+  }
   __syncthreads();
 
   for (int stride = blockDim.x / 2, lst = blockDim.x & 1; stride >= 1; lst = stride & 1, stride >>= 1) {
     stride += lst;
     __syncthreads();
-    if (t <stride) {//when t+stride is larger than #elements, there's no meaning of comparison. So when it happens, just keep the current value for parMax[t]. This always happens when an odd number of t satisfying the condition.
+    if (t < stride) {
+      //when t+stride is larger than #elements, there's no meaning of comparison. So when it happens, just keep the current value for parMax[t]. This always happens when an odd number of t satisfying the condition.
       if (t + stride < size) {
-        for (integer l = 0; l < N; ++l)
+        for (integer l = 0; l < N; ++l) {
           s[t * N + l] += s[(t + stride) * N + l];
+        }
       }
     }
     __syncthreads();

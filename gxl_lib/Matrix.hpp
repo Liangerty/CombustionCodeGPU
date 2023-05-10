@@ -10,6 +10,7 @@
 #define __device__
 #endif
 
+#ifdef __CUDACC__
 namespace ggxl {
  template <typename T>
  class MatrixDyn {
@@ -38,65 +39,9 @@ namespace ggxl {
    CUDA_CALLABLE_MEMBER const T& operator()(const int i, const int j) const { return data_[i * my + j]; }
 
    __device__ void deallocate_matrix(){delete[] data_;}
-
-//   /**
-//    * \brief Get the reference of i-th element of the mx*1 matrix or the array with mx elements
-//    * \details Do not use this as possible. This is designed for the case when the matrix is only one dimensional, or
-//    * one of the 2 dimensions is 1. Then the matrix decays to an array. And the access can be simplified as this.
-//    * \param i the subscript of a one-dimensional array
-//    * \return reference of the i-th element of the array
-//    */
-//   CUDA_CALLABLE_MEMBER T& operator[](const int i) { return data_[i]; }
-//   /**
-//    * \brief Get the constant reference of the i-th element of the mx*1 matrix or the array with mx elements
-//    * \details Do not use this as possible. This is designed for the case when the matrix is only one dimensional, or
-//    * one of the 2 dimensions is 1. Then the matrix decays to an array. And the access can be simplified as this.
-//    * \param i the subscript of a one-dimensional array
-//    * \return constant reference of the i-th element of the array
-//    */
-//   CUDA_CALLABLE_MEMBER const T& operator[](const int i) const { return data_[i]; }
-
-//   CUDA_CALLABLE_MEMBER [[nodiscard]] auto row(const int i) const { return data_ + i * my; }
-
-//   CUDA_CALLABLE_MEMBER void resize(const int nx, const int ny, T val) {
-//     mx = nx;
-//     my = ny;
-//     const auto newsize = nx * ny;
-//     if (newsize > sz) {
-//       auto ptr = new T[newsize];
-//       for (size_t i = 0; i < sz; i++) {
-//         ptr[i] = data_[i];
-//       }
-//       for (size_t i = sz; i < newsize; i++) {
-//         ptr[i] = val;
-//       }
-//       delete[] data_;
-//       data_ = ptr;
-//     }
-//     sz = newsize;
-//   }
-
-//   CUDA_CALLABLE_MEMBER void resize(const int nx, const int ny) {
-//     mx = nx;
-//     my = ny;
-//     const auto newsize = nx * ny;
-//     if (newsize > sz) {
-//       auto ptr = new T[newsize];
-//       for (size_t i = 0; i < sz; i++) {
-//         ptr[i] = data_[i];
-//       }
-//       for (size_t i = sz; i < newsize; i++) {
-//         ptr[i] = T{};
-//       }
-//       delete[] data_;
-//       data_ = ptr;
-//     }
-//     sz = newsize;
-//   }
-
-//   [[nodiscard]] int n_col() const { return my; }
  };
 }
+#endif
 
 namespace gxl{
 template <typename T, int M, int N, int BaseNumber = 0>
