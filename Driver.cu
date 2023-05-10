@@ -139,10 +139,12 @@ void cfd::Driver::steady_simulation() {
     }
 
     // Start a single iteration
+    // First, store the value of last step
+    if (step % output_screen == 0)
+      for (auto b = 0; b < n_block; ++b)
+        store_last_step <<<bpg[b], tpb >>>(field[b].d_ptr);
 
     for (auto b = 0; b < n_block; ++b) {
-      // First, store the value of last step
-      store_last_step <<<bpg[b], tpb >>>(field[b].d_ptr);
       set_dq_to_0 <<<bpg[b], tpb >>>(field[b].d_ptr);
 
       // Second, for each block, compute the residual dq
@@ -180,6 +182,7 @@ void cfd::Driver::steady_simulation() {
     // Finally, test if the simulation reaches convergence state
     if (step % output_screen == 0) {
       real err_max = compute_residual(step);
+      converged=err_max<parameter.get_real("convergence_criteria")? true: false;
       if (myid == 0)
         steady_screen_output(step, err_max);
     }

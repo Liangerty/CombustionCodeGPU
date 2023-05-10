@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
   // Set the heap maximum value for kernel functions, must be set before any cuda functions called.
   // In the multispecies simulation, currently the requested memory is limited by the number of species.
   // Now set 1GB for this value. When the grid number or species number increases, this value may need to be increased.
-  cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1024*1024*1024);
+    // cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1024*1024*1024);
   //cudaDeviceSetLimit(cudaLimitMallocHeapSize, 100*1024*1024);
 
   cfd::Parameter parameter(mpi_parallel);

@@ -70,16 +70,17 @@ void cfd::Inflow::register_boundary_condition(std::ifstream &file,
   }
   viscosity = Sutherland(temperature);
 
-  real gamma{gamma_air};  // specific heat ratio
-  real cp{0}, cv{0};
 #if MULTISPECIES == 1
   std::vector<real> cpi(n_spec, 0);
   spec.compute_cp(temperature, cpi.data());
+  real cp{0}, cv{0};
   for (size_t i = 0; i < n_spec; ++i) {
     cp += yk[i] * cpi[i];
     cv += yk[i] * (cpi[i] - R_u / spec.mw[i]);
   }
-  gamma = cp / cv;
+  real gamma = cp / cv;  // specific heat ratio
+#else
+  real gamma{gamma_air};  // specific heat ratio
 #endif  // MULTISPECIES==1
 
   const real c{std::sqrt(gamma * R_u / mw * temperature)};  // speed of sound

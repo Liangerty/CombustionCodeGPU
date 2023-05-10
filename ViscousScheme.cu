@@ -10,19 +10,18 @@ __device__ SecOrdViscScheme::SecOrdViscScheme() : ViscousScheme() {
 
 __device__ void SecOrdViscScheme::compute_fv(integer idx[3], DZone *zone, real *fv, DParameter *param) {
   const auto i = idx[0], j = idx[1], k = idx[2];
-  const auto &metric=zone->metric;
-//  const auto &m = zone->metric(i, j, k);
-//  const auto &m1 = zone->metric(i + 1, j, k);
+  const auto &m = zone->metric(i, j, k);
+  const auto &m1 = zone->metric(i + 1, j, k);
 
-  const real xi_x = 0.5 * (metric(i, j, k)(1, 1) + metric(i + 1, j, k)(1, 1));
-  const real xi_y = 0.5 * (metric(i, j, k)(1, 2) + metric(i + 1, j, k)(1, 2));
-  const real xi_z = 0.5 * (metric(i, j, k)(1, 3) + metric(i + 1, j, k)(1, 3));
-  const real eta_x = 0.5 * (metric(i, j, k)(2, 1) + metric(i + 1, j, k)(2, 1));
-  const real eta_y = 0.5 * (metric(i, j, k)(2, 2) + metric(i + 1, j, k)(2, 2));
-  const real eta_z = 0.5 * (metric(i, j, k)(2, 3) + metric(i + 1, j, k)(2, 3));
-  const real zeta_x = 0.5 * (metric(i, j, k)(3, 1) + metric(i + 1, j, k)(3, 1));
-  const real zeta_y = 0.5 * (metric(i, j, k)(3, 2) + metric(i + 1, j, k)(3, 2));
-  const real zeta_z = 0.5 * (metric(i, j, k)(3, 3) + metric(i + 1, j, k)(3, 3));
+  const real xi_x = 0.5 * (m(1, 1) + m1(1, 1));
+  const real xi_y = 0.5 * (m(1, 2) + m1(1, 2));
+  const real xi_z = 0.5 * (m(1, 3) + m1(1, 3));
+  const real eta_x = 0.5 * (m(2, 1) + m1(2, 1));
+  const real eta_y = 0.5 * (m(2, 2) + m1(2, 2));
+  const real eta_z = 0.5 * (m(2, 3) + m1(2, 3));
+  const real zeta_x = 0.5 * (m(3, 1) + m1(3, 1));
+  const real zeta_y = 0.5 * (m(3, 2) + m1(3, 2));
+  const real zeta_z = 0.5 * (m(3, 3) + m1(3, 3));
 
   // 1st order partial derivative of velocity to computational coordinate
   const auto& pv=zone->bv;
@@ -60,9 +59,9 @@ __device__ void SecOrdViscScheme::compute_fv(integer idx[3], DZone *zone, real *
   const real tau_xz = viscosity * (u_z + w_x);
   const real tau_yz = viscosity * (v_z + w_y);
 
-  const real xi_x_div_jac = 0.5 * (metric(i, j, k)(1, 1) * zone->jac(i, j, k) + metric(i + 1, j, k)(1, 1) * zone->jac(i + 1, j, k));
-  const real xi_y_div_jac = 0.5 * (metric(i, j, k)(1, 2) * zone->jac(i, j, k) + metric(i + 1, j, k)(1, 2) * zone->jac(i + 1, j, k));
-  const real xi_z_div_jac = 0.5 * (metric(i, j, k)(1, 3) * zone->jac(i, j, k) + metric(i + 1, j, k)(1, 3) * zone->jac(i + 1, j, k));
+  const real xi_x_div_jac = 0.5 * (m(1, 1) * zone->jac(i, j, k) + m1(1, 1) * zone->jac(i + 1, j, k));
+  const real xi_y_div_jac = 0.5 * (m(1, 2) * zone->jac(i, j, k) + m1(1, 2) * zone->jac(i + 1, j, k));
+  const real xi_z_div_jac = 0.5 * (m(1, 3) * zone->jac(i, j, k) + m1(1, 3) * zone->jac(i + 1, j, k));
 
   fv[0]=0;
   fv[1] = xi_x_div_jac * tau_xx + xi_y_div_jac * tau_xy + xi_z_div_jac * tau_xz;
@@ -83,15 +82,7 @@ __device__ void SecOrdViscScheme::compute_fv(integer idx[3], DZone *zone, real *
   const integer n_spec{zone->n_spec};
   const auto& y=zone->yk;
 
-  constexpr integer nsp=9;
-  real h[nsp], diffusivity[nsp], y_x[nsp], y_y[nsp], y_z[nsp];
-//  real* mem=new real[5*n_spec];
-//  real* h=mem;
-//  real* diffusivity=&h[n_spec];
-//  real* y_x=&diffusivity[n_spec];
-//  real* y_y=&y_x[n_spec];
-//  real* y_z=&y_y[n_spec];
-
+  real h[MAX_SPEC_NUMBER], diffusivity[MAX_SPEC_NUMBER], y_x[MAX_SPEC_NUMBER], y_y[MAX_SPEC_NUMBER], y_z[MAX_SPEC_NUMBER];
   const real tm = 0.5 * (pv(i, j, k, 5) + pv(i + 1, j, k, 5));
   compute_enthalpy(tm, h, param);
   real rho_uc{0}, rho_vc{0}, rho_wc{0};
@@ -119,25 +110,23 @@ __device__ void SecOrdViscScheme::compute_fv(integer idx[3], DZone *zone, real *
   for (int l = 0; l < n_spec; ++l) {
     fv[5 + l] = diffusivity[l] * (xi_x_div_jac * y_x[l] + xi_y_div_jac * y_y[l] + xi_z_div_jac * y_z[l]) - 0.5 * (y(i, j, k, l) + y(i + 1, j, k, l)) * (xi_x_div_jac * rho_uc + xi_y_div_jac * rho_vc + xi_z_div_jac * rho_wc);
   }
-//  delete[] mem;
 #endif
 }
 
 __device__ void SecOrdViscScheme::compute_gv(integer *idx, DZone *zone, real *gv, cfd::DParameter *param) {
   const auto i = idx[0], j = idx[1], k = idx[2];
-  const auto &metric=zone->metric;
-//  const auto &m = zone->metric(i, j, k);
-//  const auto &m1 = zone->metric(i, j + 1, k);
+  const auto &m = zone->metric(i, j, k);
+  const auto &m1 = zone->metric(i, j + 1, k);
 
-  const real xi_x = 0.5 * (metric(i, j, k)(1, 1) + metric(i, j + 1, k)(1, 1));
-  const real xi_y = 0.5 * (metric(i, j, k)(1, 2) + metric(i, j + 1, k)(1, 2));
-  const real xi_z = 0.5 * (metric(i, j, k)(1, 3) + metric(i, j + 1, k)(1, 3));
-  const real eta_x = 0.5 * (metric(i, j, k)(2, 1) + metric(i, j + 1, k)(2, 1));
-  const real eta_y = 0.5 * (metric(i, j, k)(2, 2) + metric(i, j + 1, k)(2, 2));
-  const real eta_z = 0.5 * (metric(i, j, k)(2, 3) + metric(i, j + 1, k)(2, 3));
-  const real zeta_x = 0.5 * (metric(i, j, k)(3, 1) + metric(i, j + 1, k)(3, 1));
-  const real zeta_y = 0.5 * (metric(i, j, k)(3, 2) + metric(i, j + 1, k)(3, 2));
-  const real zeta_z = 0.5 * (metric(i, j, k)(3, 3) + metric(i, j + 1, k)(3, 3));
+  const real xi_x = 0.5 * (m(1, 1) + m1(1, 1));
+  const real xi_y = 0.5 * (m(1, 2) + m1(1, 2));
+  const real xi_z = 0.5 * (m(1, 3) + m1(1, 3));
+  const real eta_x = 0.5 * (m(2, 1) + m1(2, 1));
+  const real eta_y = 0.5 * (m(2, 2) + m1(2, 2));
+  const real eta_z = 0.5 * (m(2, 3) + m1(2, 3));
+  const real zeta_x = 0.5 * (m(3, 1) + m1(3, 1));
+  const real zeta_y = 0.5 * (m(3, 2) + m1(3, 2));
+  const real zeta_z = 0.5 * (m(3, 3) + m1(3, 3));
 
   // 1st order partial derivative of velocity to computational coordinate
   const auto& pv=zone->bv;
@@ -175,9 +164,9 @@ __device__ void SecOrdViscScheme::compute_gv(integer *idx, DZone *zone, real *gv
   const real tau_xz = viscosity * (u_z + w_x);
   const real tau_yz = viscosity * (v_z + w_y);
 
-  const real eta_x_div_jac = 0.5 * (metric(i, j, k)(2, 1) * zone->jac(i, j, k) + metric(i, j + 1, k)(2, 1) * zone->jac(i, j + 1, k));
-  const real eta_y_div_jac = 0.5 * (metric(i, j, k)(2, 2) * zone->jac(i, j, k) + metric(i, j + 1, k)(2, 2) * zone->jac(i, j + 1, k));
-  const real eta_z_div_jac = 0.5 * (metric(i, j, k)(2, 3) * zone->jac(i, j, k) + metric(i, j + 1, k)(2, 3) * zone->jac(i, j + 1, k));
+  const real eta_x_div_jac = 0.5 * (m(2, 1) * zone->jac(i, j, k) + m1(2, 1) * zone->jac(i, j + 1, k));
+  const real eta_y_div_jac = 0.5 * (m(2, 2) * zone->jac(i, j, k) + m1(2, 2) * zone->jac(i, j + 1, k));
+  const real eta_z_div_jac = 0.5 * (m(2, 3) * zone->jac(i, j, k) + m1(2, 3) * zone->jac(i, j + 1, k));
 
   gv[0]=0;
   gv[1] = eta_x_div_jac * tau_xx + eta_y_div_jac * tau_xy + eta_z_div_jac * tau_xz;
@@ -198,15 +187,7 @@ __device__ void SecOrdViscScheme::compute_gv(integer *idx, DZone *zone, real *gv
   const integer n_spec{zone->n_spec};
   const auto& y=zone->yk;
 
-  constexpr integer nsp=9;
-  real h[nsp], diffusivity[nsp], y_x[nsp], y_y[nsp], y_z[nsp];
-//  real* mem=new real[5*n_spec];
-//  real* h=mem;
-//  real* diffusivity=&h[n_spec];
-//  real* y_x=&diffusivity[n_spec];
-//  real* y_y=&y_x[n_spec];
-//  real* y_z=&y_y[n_spec];
-
+  real h[MAX_SPEC_NUMBER], diffusivity[MAX_SPEC_NUMBER], y_x[MAX_SPEC_NUMBER], y_y[MAX_SPEC_NUMBER], y_z[MAX_SPEC_NUMBER];
   const real tm = 0.5 * (pv(i, j, k, 5) + pv(i, j + 1, k, 5));
   compute_enthalpy(tm, h, param);
   real rho_uc{0}, rho_vc{0}, rho_wc{0};
@@ -234,25 +215,23 @@ __device__ void SecOrdViscScheme::compute_gv(integer *idx, DZone *zone, real *gv
   for (int l = 0; l < n_spec; ++l) {
     gv[5 + l] = diffusivity[l] * (eta_x_div_jac * y_x[l] + eta_y_div_jac * y_y[l] + eta_z_div_jac * y_z[l]) - 0.5 * (y(i, j, k, l) + y(i, j + 1, k, l)) * (eta_x_div_jac * rho_uc + eta_y_div_jac * rho_vc + eta_z_div_jac * rho_wc);
   }
-//  delete[] mem;
 #endif
 }
 
 __device__ void SecOrdViscScheme::compute_hv(integer *idx, DZone *zone, real *hv, cfd::DParameter *param) {
   const auto i = idx[0], j = idx[1], k = idx[2];
-  const auto &metric=zone->metric;
-//  const auto &m = zone->metric(i, j, k);
-//  const auto &m1 = zone->metric(i, j, k + 1);
+  const auto &m = zone->metric(i, j, k);
+  const auto &m1 = zone->metric(i, j, k + 1);
 
-  const real xi_x = 0.5 * (metric(i, j, k)(1, 1) + metric(i, j, k + 1)(1, 1));
-  const real xi_y = 0.5 * (metric(i, j, k)(1, 2) + metric(i, j, k + 1)(1, 2));
-  const real xi_z = 0.5 * (metric(i, j, k)(1, 3) + metric(i, j, k + 1)(1, 3));
-  const real eta_x = 0.5 * (metric(i, j, k)(2, 1) + metric(i, j, k + 1)(2, 1));
-  const real eta_y = 0.5 * (metric(i, j, k)(2, 2) + metric(i, j, k + 1)(2, 2));
-  const real eta_z = 0.5 * (metric(i, j, k)(2, 3) + metric(i, j, k + 1)(2, 3));
-  const real zeta_x = 0.5 * (metric(i, j, k)(3, 1) + metric(i, j, k + 1)(3, 1));
-  const real zeta_y = 0.5 * (metric(i, j, k)(3, 2) + metric(i, j, k + 1)(3, 2));
-  const real zeta_z = 0.5 * (metric(i, j, k)(3, 3) + metric(i, j, k + 1)(3, 3));
+  const real xi_x = 0.5 * (m(1, 1) + m1(1, 1));
+  const real xi_y = 0.5 * (m(1, 2) + m1(1, 2));
+  const real xi_z = 0.5 * (m(1, 3) + m1(1, 3));
+  const real eta_x = 0.5 * (m(2, 1) + m1(2, 1));
+  const real eta_y = 0.5 * (m(2, 2) + m1(2, 2));
+  const real eta_z = 0.5 * (m(2, 3) + m1(2, 3));
+  const real zeta_x = 0.5 * (m(3, 1) + m1(3, 1));
+  const real zeta_y = 0.5 * (m(3, 2) + m1(3, 2));
+  const real zeta_z = 0.5 * (m(3, 3) + m1(3, 3));
 
   // 1st order partial derivative of velocity to computational coordinate
   const auto& pv=zone->bv;
@@ -290,9 +269,9 @@ __device__ void SecOrdViscScheme::compute_hv(integer *idx, DZone *zone, real *hv
   const real tau_xz = viscosity * (u_z + w_x);
   const real tau_yz = viscosity * (v_z + w_y);
 
-  const real zeta_x_div_jac = 0.5 * (metric(i, j, k)(3, 1) * zone->jac(i, j, k) + metric(i, j, k + 1)(3, 1) * zone->jac(i, j, k + 1));
-  const real zeta_y_div_jac = 0.5 * (metric(i, j, k)(3, 2) * zone->jac(i, j, k) + metric(i, j, k + 1)(3, 2) * zone->jac(i, j, k + 1));
-  const real zeta_z_div_jac = 0.5 * (metric(i, j, k)(3, 3) * zone->jac(i, j, k) + metric(i, j, k + 1)(3, 3) * zone->jac(i, j, k + 1));
+  const real zeta_x_div_jac = 0.5 * (m(3, 1) * zone->jac(i, j, k) + m1(3, 1) * zone->jac(i, j, k + 1));
+  const real zeta_y_div_jac = 0.5 * (m(3, 2) * zone->jac(i, j, k) + m1(3, 2) * zone->jac(i, j, k + 1));
+  const real zeta_z_div_jac = 0.5 * (m(3, 3) * zone->jac(i, j, k) + m1(3, 3) * zone->jac(i, j, k + 1));
 
   hv[0]=0;
   hv[1] = zeta_x_div_jac * tau_xx + zeta_y_div_jac * tau_xy + zeta_z_div_jac * tau_xz;
@@ -313,15 +292,7 @@ __device__ void SecOrdViscScheme::compute_hv(integer *idx, DZone *zone, real *hv
   const integer n_spec{zone->n_spec};
   const auto& y=zone->yk;
 
-  constexpr integer nsp=9;
-  real h[nsp], diffusivity[nsp], y_x[nsp], y_y[nsp], y_z[nsp];
-//  real* mem=new real[5*n_spec];
-//  real* h=mem;
-//  real* diffusivity=&h[n_spec];
-//  real* y_x=&diffusivity[n_spec];
-//  real* y_y=&y_x[n_spec];
-//  real* y_z=&y_y[n_spec];
-
+  real h[MAX_SPEC_NUMBER], diffusivity[MAX_SPEC_NUMBER], y_x[MAX_SPEC_NUMBER], y_y[MAX_SPEC_NUMBER], y_z[MAX_SPEC_NUMBER];
   const real tm = 0.5 * (pv(i, j, k, 5) + pv(i, j, k + 1, 5));
   compute_enthalpy(tm, h, param);
   real rho_uc{0}, rho_vc{0}, rho_wc{0};
@@ -349,7 +320,6 @@ __device__ void SecOrdViscScheme::compute_hv(integer *idx, DZone *zone, real *hv
   for (int l = 0; l < n_spec; ++l) {
     hv[5 + l] = diffusivity[l] * (zeta_x_div_jac * y_x[l] + zeta_y_div_jac * y_y[l] + zeta_z_div_jac * y_z[l]) - 0.5 * (y(i, j, k, l) + y(i, j, k + 1, l)) * (zeta_x_div_jac * rho_uc + zeta_y_div_jac * rho_vc + zeta_z_div_jac * rho_wc);
   }
-//  delete[] mem;
 #endif
 }
 

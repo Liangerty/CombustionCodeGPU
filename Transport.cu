@@ -46,20 +46,13 @@ __device__ void cfd::compute_transport_property(integer i, integer j, integer k,
   const real* mw=param->mw;
   const auto yk=zone->yk;
 
-  constexpr integer nsp=9;
-  real X[nsp], vis[nsp];//, lambda[nsp];
-//  real* mem=new real[n_spec*3];
-//  real* X=mem;
-//  real* vis=&X[n_spec];
-//  real* lambda=&vis[n_spec];
+  real X[MAX_SPEC_NUMBER], vis[MAX_SPEC_NUMBER];
   for (int l = 0; l < n_spec; ++l) {
     X[l] = yk(i,j,k,l) * mw_total / mw[l];
     const real t_dl{temperature * param->LJ_potent_inv[l]}; //dimensionless temperature
     const real collision_integral{1.147 * std::pow(t_dl, -0.145) + std::pow(t_dl + 0.5, -2)};
     vis[l] = param->vis_coeff[l] * std::sqrt(temperature) / collision_integral;
   }
-//  for (int l  = 0; l < n_spec; ++l)
-//    lambda[l] = vis[l] * (cp[l] + 1.25 * R_u / mw[l]);
 
   real viscosity    = 0;
   real conductivity = 0;
@@ -89,9 +82,6 @@ __device__ void cfd::compute_transport_property(integer i, integer j, integer k,
     else
       zone->rho_D(i,j,k,l)=(1-yk(i,j,k,l))*viscosity/((1-X[l])*sc);
   }
-
-//  delete[] mem;
-  //partition_fun.deallocate_matrix();
 }
 #endif
 

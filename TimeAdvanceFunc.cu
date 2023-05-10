@@ -250,7 +250,6 @@ __global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param, T
   const integer k=(blockDim.z*blockIdx.z+threadIdx.z);//(integer)
   if (i>=extent[0]||j>=extent[1]||k>=extent[2]) return;
 
-//  (*temporal_scheme)->compute_time_step(zone, i, j, k, param);
   const auto& m{zone->metric(i, j, k)};
   const auto& bv=zone->bv;
   const integer dim{zone->mz == 1 ? 2 : 3};

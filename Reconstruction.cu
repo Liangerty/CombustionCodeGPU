@@ -60,8 +60,7 @@ reconstruction(real *pv, real *pv_l, real *pv_r, Reconstruction *&method, const 
   const real t_l = pv_l[4] / (pv_l[0] * R_u * mw_inv_l);
   const real t_r = pv_r[4] / (pv_r[0] * R_u * mw_inv_r);
 
-  constexpr integer nsp=9;
-  real hl[nsp], hr[nsp], cpl_i[nsp], cpr_i[nsp];
+  real hl[MAX_SPEC_NUMBER], hr[MAX_SPEC_NUMBER], cpl_i[MAX_SPEC_NUMBER], cpr_i[MAX_SPEC_NUMBER];
   compute_enthalpy_and_cp(t_l, hl, cpl_i, param);
   compute_enthalpy_and_cp(t_r, hr, cpr_i, param);
   real cpl{0}, cpr{0}, cvl{0}, cvr{0};

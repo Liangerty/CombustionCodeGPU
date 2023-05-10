@@ -26,15 +26,11 @@ AUSMP::compute_inviscid_flux(DZone *zone, real *pv, const integer tid, DParamete
                              real *jac) {
   const auto ng{zone->ngg};
 #if MULTISPECIES == 1
-  const auto n_reconstruction = 16; // rho,u,v,w,p,Y_{1...Ns},E,gamma
-//  const auto n_reconstruction = zone->n_var + 2; // rho,u,v,w,p,Y_{1...Ns},E,gamma
+  constexpr integer n_reconstruction = 7+MAX_SPEC_NUMBER; // rho,u,v,w,p,Y_{1...Ns},E,gamma
 #else
   constexpr integer n_reconstruction=6; // rho,u,v,w,p,E
 #endif
   real pv_l[n_reconstruction], pv_r[n_reconstruction];
-//  real* mem=new real [2*n_reconstruction];
-//  auto pv_l = mem;
-//  auto pv_r = &pv_l[n_reconstruction];
   const integer i_shared = tid - 1 + ng;
   reconstruction(pv, pv_l, pv_r, reconstruction_method, i_shared, zone, param);
 
@@ -106,6 +102,5 @@ AUSMP::compute_inviscid_flux(DZone *zone, real *pv, const integer tid, DParamete
       fci[l] = coeff * pv_r[l];
     }
   }
-//  delete[]mem;
 }
 } // cfd
