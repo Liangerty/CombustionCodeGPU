@@ -8,8 +8,8 @@
 #include "TimeAdvanceFunc.cuh"
 #include "TemporalScheme.cuh"
 #include <fstream>
+#include "Parallel.h"
 #if MULTISPECIES == 1
-#include "Thermo.cuh"
 #else
 #include "Constants.h"
 #endif
@@ -276,6 +276,14 @@ real cfd::Driver::compute_residual(integer step) {
     if (res[i] > err_max)
       err_max = res[i];
   }
+
+  if (myid==0){
+    if (isnan(err_max)){
+      printf("Nan occured in step %d. Stop simulation.\n", step);
+      cfd::MpiParallel::exit();
+    }
+  }
+
   return err_max;
 }
 

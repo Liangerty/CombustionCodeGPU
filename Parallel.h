@@ -30,6 +30,8 @@ public:
 
   static void barrier();
 
+  static void exit();
+
   ~MpiParallel();
 };
 }
