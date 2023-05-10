@@ -1,17 +1,22 @@
 #include "DParameter.h"
 #include "ChemData.h"
 
-cfd::DParameter::DParameter(cfd::Parameter &parameter
-#if MULTISPECIES == 1
-    , ChemData &chem_data
-#endif
-) : myid{parameter.get_int("myid")}, dim{parameter.get_int("dimension")},n_block(parameter.get_int("n_block")),
-    inviscid_scheme{parameter.get_int("inviscid_scheme")},
-    reconstruction{parameter.get_int("reconstruction")},
-    limiter{parameter.get_int("limiter")},
-    viscous_scheme{parameter.get_int("viscous_order")},
-    temporal_scheme{parameter.get_int("temporal_scheme")},output_screen(parameter.get_int("output_screen")),
-    Pr(parameter.get_real("prandtl_number")), cfl(parameter.get_real("cfl")) {
+cfd::DParameter::DParameter(cfd::Parameter &parameter, ChemData &chem_data) : myid{parameter.get_int("myid")},
+                                                                              dim{parameter.get_int("dimension")},
+                                                                              n_block(parameter.get_int("n_block")),
+                                                                              inviscid_scheme{
+                                                                                  parameter.get_int("inviscid_scheme")},
+                                                                              reconstruction{
+                                                                                  parameter.get_int("reconstruction")},
+                                                                              limiter{parameter.get_int("limiter")},
+                                                                              viscous_scheme{
+                                                                                  parameter.get_int("viscous_order")},
+                                                                              temporal_scheme{
+                                                                                  parameter.get_int("temporal_scheme")},
+                                                                              output_screen(
+                                                                                  parameter.get_int("output_screen")),
+                                                                              Pr(parameter.get_real("prandtl_number")),
+                                                                              cfl(parameter.get_real("cfl")) {
 #if MULTISPECIES == 1
   const auto &spec = chem_data.spec;
   n_spec = spec.n_spec;
@@ -40,6 +45,6 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter
   sqrt_WiDivWjPl1Mul8.init_with_size(n_spec, n_spec);
   cudaMemcpy(sqrt_WiDivWjPl1Mul8.data(), spec.sqrt_WiDivWjPl1Mul8.data(),
              sqrt_WiDivWjPl1Mul8.size() * sizeof(real), cudaMemcpyHostToDevice);
-  Sc=parameter.get_real("schmidt_number");
+  Sc = parameter.get_real("schmidt_number");
 #endif // MULTISPECIES==1
 }

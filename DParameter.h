@@ -8,11 +8,7 @@ namespace cfd {
 struct ChemData;
 struct DParameter {
   DParameter()=default;
-  explicit DParameter(Parameter &parameter
-#if MULTISPECIES==1
-  ,ChemData& chem_data
-#endif
-  );
+  explicit DParameter(Parameter &parameter,ChemData& chem_data);
 
   integer myid = 0;   // The process id of this process
   integer dim = 3;  // The dimension of the simulation problem

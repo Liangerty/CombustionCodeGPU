@@ -3,12 +3,8 @@
 #include "Constants.h"
 #include "Define.h"
 #include "Parameter.h"
-
-#if MULTISPECIES == 1
-
 #include "ChemData.h"
 
-#endif
 
 namespace cfd {
 struct Inflow {
@@ -16,19 +12,11 @@ struct Inflow {
 
 #ifdef GPU
 
-  Inflow(integer type_label, std::ifstream &file
-#if MULTISPECIES == 1
-      , Species &spec
-#endif
-  );
+  Inflow(integer type_label, std::ifstream &file, Species &spec);
 
 #endif
 
-  void register_boundary_condition(std::ifstream &file, Parameter &parameter
-#if MULTISPECIES == 1
-      , Species &spec
-#endif
-  );
+  void register_boundary_condition(std::ifstream &file, Parameter &parameter, Species &spec);
 
   [[nodiscard]] std::tuple<real, real, real, real, real, real> var_info() const;
 

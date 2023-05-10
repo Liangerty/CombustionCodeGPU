@@ -8,11 +8,7 @@
 cfd::Inflow::Inflow(integer type_label) : label(type_label) {}
 
 void cfd::Inflow::register_boundary_condition(std::ifstream &file,
-                                              Parameter &parameter
-#if MULTISPECIES == 1
-    , Species &spec
-#endif
-) {
+                                              Parameter &parameter, Species &spec) {
   std::map<std::string, real> par;
   std::map<std::string, real> spec_inflow;
   std::string input{}, key{}, name{};

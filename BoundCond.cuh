@@ -17,11 +17,7 @@ struct BCInfo {
 class Mesh;
 
 template<typename BCType>
-void register_bc(BCType *&bc, Parameter &parameter, int n_bc, std::vector<integer> &indices, BCInfo *&bc_info
-#if MULTISPECIES == 1
-    , Species &species
-#endif
-);
+void register_bc(BCType *&bc, Parameter &parameter, int n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species);
 
 struct DZone;
 struct DParameter;
@@ -30,11 +26,7 @@ struct Field;
 struct DBoundCond {
   DBoundCond()=default;
 
-  void initialize_bc_on_GPU(Mesh &mesh, std::vector<Field>& field
-#if MULTISPECIES == 1
-      , Species &species
-#endif
-  );
+  void initialize_bc_on_GPU(Mesh &mesh, std::vector<Field>& field, Species &species);
 
   void link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) const;
 

@@ -26,36 +26,23 @@ cfd::Driver::Driver(Parameter &parameter, Mesh &mesh_, ChemData &chem_data) : my
     field.emplace_back(parameter, mesh[blk]);
   }
 
-  initialize_basic_variables(parameter, mesh, field
-#if MULTISPECIES == 1
-      , chem_data
-#endif
-  );
+  initialize_basic_variables(parameter, mesh, field, chem_data);
 
   // The following code is used for GPU memory allocation
 #ifdef GPU
-  DParameter d_param(parameter
-#if MULTISPECIES == 1
-      , chem_data
-#endif
-  );
+  DParameter d_param(parameter, chem_data);
   cudaMalloc(&param, sizeof(DParameter));
   cudaMemcpy(param, &d_param, sizeof(DParameter), cudaMemcpyHostToDevice);
   for (integer blk = 0; blk < mesh.n_block; ++blk) {
     field[blk].setup_device_memory(parameter);
   }
-  bound_cond.initialize_bc_on_GPU(mesh_, field
-#if MULTISPECIES == 1
-      , chem_data.spec
-#endif
-  );
+  bound_cond.initialize_bc_on_GPU(mesh_, field, chem_data.spec);
   cudaMalloc(&inviscid_scheme, sizeof(InviscidScheme *));
   cudaMalloc(&viscous_scheme, sizeof(ViscousScheme *));
   cudaMalloc(&temporal_scheme, sizeof(TemporalScheme *));
 
   setup_schemes<<<1, 1>>>(inviscid_scheme, viscous_scheme, temporal_scheme, param);
 #endif
-//  cudaMalloc(&d_res,4*sizeof (real));
 }
 
 void cfd::Driver::initialize_computation() {

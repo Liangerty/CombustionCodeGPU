@@ -6,27 +6,15 @@
 #include "BoundCond.h"
 #include "fmt/format.h"
 
-void cfd::initialize_basic_variables(Parameter &parameter, const Mesh &mesh, std::vector<Field> &field
-#if MULTISPECIES == 1
-    , ChemData &chem_data
-#endif
-) {
+void cfd::initialize_basic_variables(Parameter &parameter, const Mesh &mesh, std::vector<Field> &field, ChemData &chem_data) {
   const integer init_method = parameter.get_int("initial");
   switch (init_method) {
     case 0:
-      initialize_from_start(parameter, mesh, field
-#if MULTISPECIES == 1
-          , chem_data
-#endif
-      );
+      initialize_from_start(parameter, mesh, field, chem_data);
   }
 }
 
-void cfd::initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vector<Field> &field
-#if MULTISPECIES == 1
-    , ChemData &chem_data
-#endif
-) {
+void cfd::initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vector<Field> &field, ChemData &chem_data) {
   // First read the initialization file to see if some patches are needed.
   std::ifstream init_file("input_files/setup/8_initialization.txt");
   std::string input{}, key{};
@@ -45,7 +33,7 @@ void cfd::initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vec
 
   gxl::read_until(init_file, input, "label", gxl::Case::lower);
   while (group < tot_group) {
-    if (input.rfind("end", 0) == 0) break; //input.starts_with("end")
+    if (input.rfind("end", 0) == 0) break;
     gxl::to_stringstream(input, line);
     int label{0};
     line >> key >> label;
@@ -61,11 +49,7 @@ void cfd::initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vec
       int label2{0};
       line >> key >> label2;
       if (label2 == label) {
-        this_cond.register_boundary_condition(inflow_file, parameter
-#if MULTISPECIES == 1
-            , chem_data.spec
-#endif
-        );
+        this_cond.register_boundary_condition(inflow_file, parameter, chem_data.spec);
         found = true;
       }
     }

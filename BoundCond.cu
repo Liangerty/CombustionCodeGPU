@@ -10,11 +10,7 @@
 
 #ifdef GPU
 namespace cfd {
-cfd::Inflow::Inflow(integer type_label, std::ifstream &file
-#if MULTISPECIES == 1
-    , Species &spec
-#endif
-) : label{type_label} {
+cfd::Inflow::Inflow(integer type_label, std::ifstream &file, Species &spec) : label{type_label} {
   std::map<std::string, real> par;
   std::map<std::string, real> spec_inflow;
   std::string input{}, key{}, name{};
@@ -105,11 +101,7 @@ cfd::Inflow::Inflow(integer type_label, std::ifstream &file
 }
 
 template<typename BCType>
-void register_bc(BCType *&bc, int n_bc, std::vector<integer> &indices, BCInfo *&bc_info
-#if MULTISPECIES == 1
-    , Species &species
-#endif
-) {
+void register_bc(BCType *&bc, int n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species) {
   if (!(n_bc > 0)) {
     return;
   }
@@ -125,11 +117,7 @@ void register_bc(BCType *&bc, int n_bc, std::vector<integer> &indices, BCInfo *&
 }
 
 template<>
-void register_bc<Wall>(Wall *&walls, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info
-#if MULTISPECIES == 1
-    , Species &species
-#endif
-) {
+void register_bc<Wall>(Wall *&walls, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species) {
   if (!(n_bc > 0)) {
     return;
   }
@@ -164,11 +152,7 @@ void register_bc<Wall>(Wall *&walls, integer n_bc, std::vector<integer> &indices
 }
 
 template<>
-void register_bc<Inflow>(Inflow *&inflows, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info
-#if MULTISPECIES == 1
-    , Species &species
-#endif
-) {
+void register_bc<Inflow>(Inflow *&inflows, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species) {
   if (!(n_bc > 0)) {
     return;
   }
@@ -195,11 +179,7 @@ void register_bc<Inflow>(Inflow *&inflows, integer n_bc, std::vector<integer> &i
       }
     }
     bc_info[idx].label = bc_label;
-    Inflow inflow(bc_label, bc_file
-#if MULTISPECIES == 1
-        , species
-#endif
-    );
+    Inflow inflow(bc_label, bc_file, species);
     cudaMemcpy(&(inflows[idx]), &inflow, sizeof(Inflow), cudaMemcpyHostToDevice);
     ++counter;
   }
@@ -312,11 +292,7 @@ void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> 
   }
 }
 
-void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field
-#if MULTISPECIES==1
-                                      , Species &species
-#endif
-) {
+void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Species &species) {
   std::vector<integer> bc_labels;
   // Count the number of distinct boundary conditions
   for (auto i = 0; i < mesh.n_block; i++) {
@@ -389,21 +365,9 @@ void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field
   }
 
   // Read specific conditions
-  register_bc<Wall>(wall, n_wall, wall_idx, wall_info
-#if MULTISPECIES == 1
-      , species
-#endif
-  );
-  register_bc<Inflow>(inflow, n_inflow, inflow_idx, inflow_info
-#if MULTISPECIES == 1
-      , species
-#endif
-  );
-  register_bc<Outflow>(outflow, n_outflow, outflow_idx, outflow_info
-#if MULTISPECIES == 1
-      , species
-#endif
-  );
+  register_bc<Wall>(wall, n_wall, wall_idx, wall_info, species);
+  register_bc<Inflow>(inflow, n_inflow, inflow_idx, inflow_info, species);
+  register_bc<Outflow>(outflow, n_outflow, outflow_idx, outflow_info, species);
 
   link_bc_to_boundaries(mesh,field);
 }
