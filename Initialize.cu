@@ -33,7 +33,7 @@ void cfd::initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vec
 
   gxl::read_until(init_file, input, "label", gxl::Case::lower);
   while (group < tot_group) {
-    if (input.rfind("end", 0) == 0) break;
+    if (input.rfind("end", 0) == 0) break; //input.starts_with("end")
     gxl::to_stringstream(input, line);
     int label{0};
     line >> key >> label;

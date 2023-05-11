@@ -197,17 +197,16 @@ void cfd::Driver::data_communication() {
     for (auto l = 0; l < n_innFace; ++l) {
       // reference to the current face
       const auto &fc = mesh[blk].inner_face[l];
-      uint tpb[3], bpg[3], n_point[3];
+      uint tpb[3], bpg[3];
       for (size_t j = 0; j < 3; ++j) {
-        n_point[j] = abs(fc.range_start[j] - fc.range_end[j]) + 1;
-        tpb[j] = n_point[j] <= (2 * ngg + 1) ? 1 : 16;
-        bpg[j] = (n_point[j] - 1) / tpb[j] + 1;
+        tpb[j] = fc.n_point[j] <= (2 * ngg + 1) ? 1 : 16;
+        bpg[j] = (fc.n_point[j] - 1) / tpb[j] + 1;
       }
       dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
 
       // variables of the neighbor block
       auto nv = field[fc.target_block].d_ptr;
-      inner_communication<<<BPG, TPB>>>(v, nv, n_point, l);
+      inner_communication<<<BPG, TPB>>>(v, nv, l);
     }
   }
 }

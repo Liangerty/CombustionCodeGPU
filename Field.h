@@ -91,7 +91,7 @@ __global__ void compute_cv_from_bv(DZone *zone, DParameter* param);
 
 __global__ void update_physical_properties(DZone *zone, DParameter* param);
 
-__global__ void inner_communication(DZone *zone, DZone *tar_zone, const uint n_point[3], integer i_face);
+__global__ void inner_communication(DZone *zone, DZone *tar_zone, integer i_face);
 
 __global__ void eliminate_k_gradient(DZone *zone);
 }

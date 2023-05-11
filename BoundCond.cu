@@ -203,12 +203,29 @@ void DBoundCond::link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) co
     count_boundary_of_type_bc(mesh[i].boundary, n_inflow, i_inflow, i, n_block, inflow_info);
     count_boundary_of_type_bc(mesh[i].boundary, n_outflow, i_outflow, i, n_block, outflow_info);
   }
+  for (size_t l = 0; l < n_wall; l++) {
+    wall_info[l].boundary = new int2[wall_info[l].n_boundary];
+  }
+  for (size_t l = 0; l < n_inflow; l++) {
+    inflow_info[l].boundary = new int2[inflow_info[l].n_boundary];
+  }
+  for (size_t l = 0; l < n_outflow; l++) {
+    outflow_info[l].boundary = new int2[outflow_info[l].n_boundary];
+  }
+
   const auto ngg{mesh[0].ngg};
   for (auto i = 0; i < n_block; i++) {
     link_boundary_and_condition(mesh[i].boundary, wall_info, n_wall, i_wall, i);
+    link_boundary_and_condition(mesh[i].boundary, inflow_info, n_inflow, i_inflow, i);
+    link_boundary_and_condition(mesh[i].boundary, outflow_info, n_outflow, i_outflow, i);
+  }
+  for (auto i = 0; i < n_block; i++){
     for (size_t l = 0; l < n_wall; l++) {
       const auto nb = wall_info[l].n_boundary;
       for (size_t m = 0; m < nb; m++) {
+        auto i_zone=wall_info[l].boundary[m].x;
+        if (i_zone!=i)
+          continue;
         auto &b = mesh[i].boundary[wall_info[l].boundary[m].y];
         for (int q = 0; q < 3; ++q) {
           if (q == b.face) continue;
@@ -219,8 +236,6 @@ void DBoundCond::link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) co
     }
     cudaMemcpy(field[i].h_ptr->boundary, mesh[i].boundary.data(), mesh[i].boundary.size() * sizeof(Boundary),
                cudaMemcpyHostToDevice);
-    link_boundary_and_condition(mesh[i].boundary, inflow_info, n_inflow, i_inflow, i);
-    link_boundary_and_condition(mesh[i].boundary, outflow_info, n_outflow, i_outflow, i);
   }
   delete[]i_wall;
   delete[]i_inflow;
@@ -398,10 +413,6 @@ void count_boundary_of_type_bc(const std::vector<Boundary> &boundary, integer n_
 
 void link_boundary_and_condition(const std::vector<Boundary> &boundary, BCInfo *bc, integer n_bc, const integer *sep,
                                  integer i_zone) {
-  for (size_t l = 0; l < n_bc; l++) {
-    bc[l].boundary = new int2[bc[l].n_boundary];
-  }
-
   const auto n_boundary{boundary.size()};
   for (size_t l = 0; l < n_bc; l++) {
     integer label = bc[l].label;

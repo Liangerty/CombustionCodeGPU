@@ -218,15 +218,15 @@ __global__ void cfd::update_physical_properties(cfd::DZone *zone, cfd::DParamete
 }
 
 
-__global__ void cfd::inner_communication(cfd::DZone *zone, cfd::DZone *tar_zone, const uint *n_point, integer i_face) {
+__global__ void cfd::inner_communication(cfd::DZone *zone, cfd::DZone *tar_zone, integer i_face) {
+  const auto& f = zone->innerface[i_face];
   uint n[3];
   n[0] = blockIdx.x * blockDim.x + threadIdx.x;
   n[1] = blockDim.y + blockIdx.y + threadIdx.y;
   n[2] = blockIdx.z * blockDim.z + threadIdx.z;
-  if (n[0] >= n_point[0] || n[1] >= n_point[1] || n[2] >= n_point[2]) return;
+  if (n[0] >= f.n_point[0] || n[1] >= f.n_point[1] || n[2] >= f.n_point[2]) return;
 
   integer idx[3], idx_tar[3];
-  const auto &f = zone->innerface[i_face];
   for (integer i = 0; i < 3; ++i) {
     auto d_idx = f.loop_dir[i] * (integer) (n[i]);
     idx[i] = f.range_start[i] + d_idx;

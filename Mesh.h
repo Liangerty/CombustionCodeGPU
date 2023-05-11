@@ -57,6 +57,7 @@ struct InnerFace {
   integer src_tar[3]{0, 0, 0};  // the corresponding relation between this source face and the target face
   integer loop_dir[3]{1, 1, 1};  // The direction that when looping over the face, i,j,k increment +1/-1
   integer target_loop_dir[3]{1, 1, 1};  // The direction that when looping over the face, i,j,k increment +1/-1
+  integer n_point[3]{0, 0, 0};
 };
 
 struct ParallelFace {

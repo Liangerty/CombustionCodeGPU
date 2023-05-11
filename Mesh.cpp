@@ -126,7 +126,7 @@ void cfd::InnerFace::register_boundary(const integer ngg, const integer dim) {
   } else {
     target_start[target_face] = (sgn_tar > 0) ? 0 : ngg;
   }
-  for (integer i = 0; i < dim; ++i) {
+  for (integer i = 0; i < 3; ++i) {
     loop_dir[i] = range_start[i] <= range_end[i] ? 1 : -1;
     target_loop_dir[i] = gxl::sgn(src_tar[i]);
     src_tar[i] = std::abs(src_tar[i]) - 1;
@@ -139,6 +139,9 @@ void cfd::InnerFace::register_boundary(const integer ngg, const integer dim) {
       target_start[i] -= target_loop_dir[i] * loop_dir[i] * ngg;
       target_end[i] += target_loop_dir[i] * loop_dir[i] * ngg;
     }
+  }
+  for (integer i = 0; i < 3; ++i) {
+    n_point[i] = abs(range_start[i] - range_end[i]) + 1;
   }
 }
 
