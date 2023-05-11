@@ -8,6 +8,7 @@
 #include "TimeAdvanceFunc.cuh"
 #include "TemporalScheme.cuh"
 #include <fstream>
+#include <filesystem>
 #include "Parallel.h"
 #include "Output.h"
 
@@ -60,7 +61,9 @@ void cfd::Driver::initialize_computation() {
   }
 
   // Second, apply boundary conditions to all boundaries, including face communication between faces
-  bound_cond.apply_boundary_conditions(mesh, field, param);
+  for (integer b=0;b<mesh.n_block;++b)
+    bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
+//  bound_cond.apply_boundary_conditions(mesh, field, param);
   cudaDeviceSynchronize();
   if (myid == 0) {
     fmt::print("Boundary conditions are applied successfully for initialization\n");
@@ -92,7 +95,7 @@ void cfd::Driver::simulate() {
   } else {
     const auto temporal_tag{parameter.get_int("temporal_scheme")};
     switch (temporal_tag) {
-      case 11:
+      case 11: // For example, if DULUSGS, then add a function to initiate the computation instead of intialize before setting up the scheme as CPU code
       case 12:
       default:fmt::print("Not implemented");
     }
@@ -151,7 +154,8 @@ void cfd::Driver::steady_simulation() {
       update_cv_and_bv<<<bpg[b], tpb>>>(field[b].d_ptr, param);
 
       // apply boundary conditions
-      bound_cond.apply_boundary_conditions(mesh, field, param);
+      bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
+//      bound_cond.apply_boundary_conditions(mesh, field, param);
     }
     // Third, transfer data between and within processes
     data_communication();
@@ -181,7 +185,7 @@ void cfd::Driver::steady_simulation() {
     }
     cudaDeviceSynchronize();
     if (step % output_file == 0) {
-      output.print_field();
+      output.print_field(step, 2);
     }
   }
   delete[] bpg;
@@ -263,6 +267,12 @@ real cfd::Driver::compute_residual(integer step) {
         res_scale[i] = 1e-20;
       }
     }
+    const std::filesystem::path out_dir("output/message");
+    if (!exists(out_dir))
+      create_directories(out_dir);
+    std::ofstream res_scale_out(out_dir.string()+"/residual_scale.txt");
+    res_scale_out<<fmt::format("{}\n{}\n{}\n{}\n",res_scale[0],res_scale[1],res_scale[2],res_scale[3]);
+    res_scale_out.close();
   }
 
   for (integer i = 0; i < 4; ++i) {

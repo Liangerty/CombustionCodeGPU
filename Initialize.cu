@@ -11,6 +11,13 @@ void cfd::initialize_basic_variables(Parameter &parameter, const Mesh &mesh, std
   switch (init_method) {
     case 0:
       initialize_from_start(parameter, mesh, field, chem_data);
+      break;
+    case 1:
+      read_flowfield(parameter, mesh, field, chem_data);
+      break;
+    default:
+      fmt::print("The initialization method is unknown, use freestream value to intialize by default.\n");
+      initialize_from_start(parameter, mesh, field, chem_data);
   }
 }
 
@@ -92,4 +99,9 @@ void cfd::initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vec
     history << fmt::format("step\terror_max\n");
     history.close();
   }
+}
+
+void cfd::read_flowfield(cfd::Parameter &parameter, const cfd::Mesh &mesh, std::vector<Field> &field,
+                         cfd::ChemData &chem_data) {
+
 }

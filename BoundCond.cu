@@ -243,7 +243,7 @@ void DBoundCond::link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) co
   fmt::print("Finish setting up boundary conditions.\n");
 }
 
-void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> &field, DParameter *param) const {
+void DBoundCond::apply_boundary_conditions(const Block &block, Field &field, DParameter *param) const {
   // Boundary conditions are applied in the order of priority, which with higher priority is applied later.
   // Finally, the communication between faces will be carried out after these bc applied
   // Priority: (-1 - inner faces >) 2-wall > 3-symmetry > 5-inflow > 6-outflow > 4-farfield
@@ -255,8 +255,10 @@ void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> 
     const auto nb = outflow_info[l].n_boundary;
     for (size_t i = 0; i < nb; i++) {
       auto [i_zone, i_face] = outflow_info[l].boundary[i];
-      const auto &h_f = mesh[i_zone].boundary[i_face];
-      const auto ngg = mesh[i_zone].ngg;
+      if (i_zone!=block.block_id)
+        continue;
+      const auto &h_f = block.boundary[i_face];
+      const auto ngg = block.ngg;
       uint tpb[3], bpg[3];
       for (size_t j = 0; j < 3; j++) {
         auto n_point = h_f.range_end[j] - h_f.range_start[j] + 1;
@@ -264,7 +266,7 @@ void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> 
         bpg[j] = (n_point - 1) / tpb[j] + 1;
       }
       dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-      apply_outflow<<<BPG, TPB>>>(field[i_zone].d_ptr, i_face);
+      apply_outflow<<<BPG, TPB>>>(field.d_ptr, i_face);
     }
   }
 
@@ -273,8 +275,10 @@ void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> 
     const auto nb = inflow_info[l].n_boundary;
     for (size_t i = 0; i < nb; i++) {
       auto [i_zone, i_face] = inflow_info[l].boundary[i];
-      const auto &hf = mesh[i_zone].boundary[i_face];
-      const auto ngg = mesh[i_zone].ngg;
+      if (i_zone!=block.block_id)
+        continue;
+      const auto &hf = block.boundary[i_face];
+      const auto ngg = block.ngg;
       uint tpb[3], bpg[3];
       for (size_t j = 0; j < 3; j++) {
         auto n_point = hf.range_end[j] - hf.range_start[j] + 1;
@@ -282,7 +286,7 @@ void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> 
         bpg[j] = (n_point - 1) / tpb[j] + 1;
       }
       dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-      apply_inflow<<<BPG, TPB>>>(field[i_zone].d_ptr, &inflow[l], param, i_face);
+      apply_inflow<<<BPG, TPB>>>(field.d_ptr, &inflow[l], param, i_face);
     }
   }
 
@@ -293,8 +297,10 @@ void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> 
     const auto nb = wall_info[l].n_boundary;
     for (size_t i = 0; i < nb; i++) {
       auto [i_zone, i_face] = wall_info[l].boundary[i];
-      const auto &hf = mesh[i_zone].boundary[i_face];
-      const auto ngg = mesh[i_zone].ngg;
+      if (i_zone!=block.block_id)
+        continue;
+      const auto &hf = block.boundary[i_face];
+      const auto ngg = block.ngg;
       uint tpb[3], bpg[3];
       for (size_t j = 0; j < 3; j++) {
         auto n_point = hf.range_end[j] - hf.range_start[j] + 1;
@@ -302,10 +308,73 @@ void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> 
         bpg[j] = (n_point - 1) / tpb[j] + 1;
       }
       dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-      apply_wall<<<BPG, TPB>>>(field[i_zone].d_ptr, &wall[l], param, i_face);
+      apply_wall<<<BPG, TPB>>>(field.d_ptr, &wall[l], param, i_face);
     }
   }
 }
+//void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> &field, DParameter *param) const {
+//  // Boundary conditions are applied in the order of priority, which with higher priority is applied later.
+//  // Finally, the communication between faces will be carried out after these bc applied
+//  // Priority: (-1 - inner faces >) 2-wall > 3-symmetry > 5-inflow > 6-outflow > 4-farfield
+//
+//  // 4-farfield
+//
+//  // 6-outflow
+//  for (size_t l = 0; l < n_outflow; l++) {
+//    const auto nb = outflow_info[l].n_boundary;
+//    for (size_t i = 0; i < nb; i++) {
+//      auto [i_zone, i_face] = outflow_info[l].boundary[i];
+//      const auto &h_f = mesh[i_zone].boundary[i_face];
+//      const auto ngg = mesh[i_zone].ngg;
+//      uint tpb[3], bpg[3];
+//      for (size_t j = 0; j < 3; j++) {
+//        auto n_point = h_f.range_end[j] - h_f.range_start[j] + 1;
+//        tpb[j] = n_point <= (2 * ngg + 1) ? 1 : 16;
+//        bpg[j] = (n_point - 1) / tpb[j] + 1;
+//      }
+//      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
+//      apply_outflow<<<BPG, TPB>>>(field[i_zone].d_ptr, i_face);
+//    }
+//  }
+//
+//  // 5-inflow
+//  for (size_t l = 0; l < n_inflow; l++) {
+//    const auto nb = inflow_info[l].n_boundary;
+//    for (size_t i = 0; i < nb; i++) {
+//      auto [i_zone, i_face] = inflow_info[l].boundary[i];
+//      const auto &hf = mesh[i_zone].boundary[i_face];
+//      const auto ngg = mesh[i_zone].ngg;
+//      uint tpb[3], bpg[3];
+//      for (size_t j = 0; j < 3; j++) {
+//        auto n_point = hf.range_end[j] - hf.range_start[j] + 1;
+//        tpb[j] = n_point <= (2 * ngg + 1) ? 1 : 16;
+//        bpg[j] = (n_point - 1) / tpb[j] + 1;
+//      }
+//      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
+//      apply_inflow<<<BPG, TPB>>>(field[i_zone].d_ptr, &inflow[l], param, i_face);
+//    }
+//  }
+//
+//  // 3-symmetry
+//
+//  // 2 - wall
+//  for (size_t l = 0; l < n_wall; l++) {
+//    const auto nb = wall_info[l].n_boundary;
+//    for (size_t i = 0; i < nb; i++) {
+//      auto [i_zone, i_face] = wall_info[l].boundary[i];
+//      const auto &hf = mesh[i_zone].boundary[i_face];
+//      const auto ngg = mesh[i_zone].ngg;
+//      uint tpb[3], bpg[3];
+//      for (size_t j = 0; j < 3; j++) {
+//        auto n_point = hf.range_end[j] - hf.range_start[j] + 1;
+//        tpb[j] = n_point <= (2 * ngg + 1) ? 1 : 16;
+//        bpg[j] = (n_point - 1) / tpb[j] + 1;
+//      }
+//      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
+//      apply_wall<<<BPG, TPB>>>(field[i_zone].d_ptr, &wall[l], param, i_face);
+//    }
+//  }
+//}
 
 void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Species &species) {
   std::vector<integer> bc_labels;

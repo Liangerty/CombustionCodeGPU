@@ -15,7 +15,7 @@ cfd::Output::Output(int _myid, const cfd::Mesh& _mesh, std::vector<Field>& _fiel
 }
 
 namespace cfd {
-void Output::print_field(int ngg) const {
+void Output::print_field(integer step, int ngg) const {
   // Copy data from GPU to CPU
   for (auto& f:field) {
     f.copy_data_from_device();
@@ -92,11 +92,27 @@ void Output::print_field(int ngg) const {
     fwrite(&mx, 4, 1, fp);
     fwrite(&my, 4, 1, fp);
     fwrite(&mz, 4, 1, fp);
+
     // 11. For all zone types (repeat for each Auxiliary data name/value pair)
     // 1=Auxiliary name/value pair to follow; 0=No more Auxiliary name/value pairs.
-    constexpr int32_t auxi_data{0};
-    fwrite(&auxi_data, 4, 1, fp);
     // If the above is 1, then supply the following: name string, Auxiliary Value Format, Value string
+
+    // First, record the current simulation step
+    constexpr int32_t auxi_data{1};
+    fwrite(&auxi_data,4,1,fp);
+    // Name string
+    constexpr auto step_name{"step"};
+    write_str(step_name,fp);
+    // Auxiliary Value Format(Currently only allow 0=AuxDataType_String)
+    constexpr int32_t auxi_val_form{0};
+    fwrite(&auxi_val_form,4,1,fp);
+    // Value string
+    const auto step_str=std::to_string(step);
+    write_str(step_str.c_str(),fp);
+
+    // No more data
+    constexpr int32_t no_more_auxi_data{0};
+    fwrite(&no_more_auxi_data, 4, 1, fp);
   }
 
   // End of Header

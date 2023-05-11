@@ -17,7 +17,8 @@ public:
   const Parameter& parameter;
   const Species& species;
 
-  Output(integer _myid, const Mesh& _mesh, std::vector<Field>& _field, const Parameter& _parameter, const Species& spec);//
+  Output(integer _myid, const Mesh &_mesh, std::vector<Field> &_field, const Parameter &_parameter,
+         const Species &spec);//
 
 //  Output(const Output&)            = delete;
 //  Output(Output&&)                 = delete;
@@ -26,10 +27,10 @@ public:
 
 //  void print_mesh(int ngg = 0) const;
 
-  void print_field(int ngg = 0) const;
+  void print_field(integer step, int ngg = 0) const;
 
   ~Output() = default;
 };
 
-void write_str(const char* str, FILE* file);
+void write_str(const char *str, FILE *file);
 } // cfd

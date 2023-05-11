@@ -2,13 +2,21 @@
 #include <fstream>
 #include <sstream>
 #include "Parallel.h"
-#include "Define.h"
+#include <filesystem>
 
 cfd::Parameter::Parameter(const MpiParallel &mpi_parallel) {
   read_param_from_file();
   int_parameters["myid"] = mpi_parallel.my_id;
   //int_parameters["n_proc"] = mpi_parallel.n_proc; // Currently commented, assuming the n_proc is not needed outside the class MpiParallel
-  bool_parameters["parallel"] = mpi_parallel.parallel;
+  bool_parameters["parallel"] = cfd::MpiParallel::parallel;
+
+  // Used for continue computing, record some info about the current simulation
+  const std::filesystem::path out_dir("output/message");
+  if (!exists(out_dir))
+    create_directories(out_dir);
+  std::ofstream ngg_out(out_dir.string()+"/ngg.txt");
+  ngg_out<<get_int("ngg");
+  ngg_out.close();
 }
 
 cfd::Parameter::Parameter(const std::string &filename) {
