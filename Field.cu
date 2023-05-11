@@ -222,15 +222,17 @@ __global__ void cfd::inner_communication(cfd::DZone *zone, cfd::DZone *tar_zone,
   const auto& f = zone->innerface[i_face];
   uint n[3];
   n[0] = blockIdx.x * blockDim.x + threadIdx.x;
-  n[1] = blockDim.y + blockIdx.y + threadIdx.y;
+  n[1] = blockDim.y * blockIdx.y + threadIdx.y;
   n[2] = blockIdx.z * blockDim.z + threadIdx.z;
   if (n[0] >= f.n_point[0] || n[1] >= f.n_point[1] || n[2] >= f.n_point[2]) return;
 
-  integer idx[3], idx_tar[3];
+  integer idx[3], idx_tar[3], d_idx[3];
   for (integer i = 0; i < 3; ++i) {
-    auto d_idx = f.loop_dir[i] * (integer) (n[i]);
-    idx[i] = f.range_start[i] + d_idx;
-    idx_tar[i] = f.target_start[i] + f.target_loop_dir[i] * d_idx;
+    d_idx[i] = f.loop_dir[i] * (integer)(n[i]);
+    idx[i] = f.range_start[i] + d_idx[i];
+  }
+  for (integer i = 0; i < 3; ++i) {
+    idx_tar[i] = f.target_start[i] + f.target_loop_dir[i] * d_idx[f.src_tar[i]];
   }
 
   // The face direction: which of i(0)/j(1)/k(2) is the coincided face.

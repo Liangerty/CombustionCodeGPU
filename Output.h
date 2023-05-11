@@ -12,10 +12,10 @@ struct Species;
 class Output {
 public:
   const int myid{0};
-  const Mesh& mesh;
-  std::vector<Field>& field;
-  const Parameter& parameter;
-  const Species& species;
+  const Mesh &mesh;
+  std::vector<Field> &field;
+  const Parameter &parameter;
+  const Species &species;
 
   Output(integer _myid, const Mesh &_mesh, std::vector<Field> &_field, const Parameter &_parameter,
          const Species &spec);//

@@ -155,7 +155,6 @@ void cfd::Driver::steady_simulation() {
 
       // apply boundary conditions
       bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
-//      bound_cond.apply_boundary_conditions(mesh, field, param);
     }
     // Third, transfer data between and within processes
     data_communication();
@@ -185,7 +184,7 @@ void cfd::Driver::steady_simulation() {
     }
     cudaDeviceSynchronize();
     if (step % output_file == 0) {
-      output.print_field(step, 2);
+      output.print_field(step);
     }
   }
   delete[] bpg;
