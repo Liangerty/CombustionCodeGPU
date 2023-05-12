@@ -28,6 +28,14 @@ cfd::Driver::Driver(Parameter &parameter, Mesh &mesh_, ChemData &chem_data) : my
   }
 
   initialize_basic_variables(parameter, mesh, field, chem_data);
+  if(parameter.get_int("initial")==1){
+    // If continue from previous results, then we need the residual scales
+    // If the file does not exist, then we have a trouble
+    std::ifstream res_scale_in("output/message/residual_scale.txt");
+    res_scale_in>>res_scale[0]>>res_scale[1]>>res_scale[2]>>res_scale[3];
+    res_scale_in.close();
+  }
+
 
   // The following code is used for GPU memory allocation
 #ifdef GPU
@@ -105,8 +113,8 @@ void cfd::Driver::simulate() {
 void cfd::Driver::steady_simulation() {
   fmt::print("Steady flow simulation.\n");
   bool converged{false};
-  integer step{0};
-  integer total_step{parameter.get_int("total_step")};
+  integer step{parameter.get_int("step")};
+  integer total_step{parameter.get_int("total_step")+step};
   const integer n_block{mesh.n_block};
   const integer n_var{parameter.get_int("n_var")};
   const integer ngg{mesh[0].ngg};

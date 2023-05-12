@@ -233,7 +233,7 @@ public:
 
 //  [[nodiscard]] auto cend() const { return data_.cend(); }
 
-  void resize(int ni, int nj, int nk, int _n_ghost);
+  void resize(int ni, int nj, int nk, int _n_ghost, T dd = T{});
 
 //  void resize(int ni, int nj, int nk, int _n_ghost, T val);
 //
@@ -248,12 +248,12 @@ inline Array3D<T, major>::Array3D(const Array3D &arr): Array3D<T, major>(arr.n1,
 }
 
 template<typename DataType, Major major>
-void Array3D<DataType, major>::resize(const int ni, const int nj, const int nk, const int _n_ghost) {
+void Array3D<DataType, major>::resize(const int ni, const int nj, const int nk, const int _n_ghost, DataType dd) {
   ng = _n_ghost;
   n1 = ni;
   n2 = nj;
   n3 = nk;
-  data_.resize((ni + 2 * ng) * (nj + 2 * ng) * (nk + 2 * ng));
+  data_.resize((ni + 2 * ng) * (nj + 2 * ng) * (nk + 2 * ng), dd);
   if constexpr (major == Major::RowMajor) {
     disp2 = n3 + 2 * ng;
   } else {
@@ -434,7 +434,7 @@ public:
 //
 //  void reserve(int ni, int nj, int nk, int nl, int ngg);
 
-  void resize(int ni, int nj, int nk, int nl, int ngg);
+  void resize(int ni, int nj, int nk, int nl, int ngg, T&& t=T{});
 
 //  auto size() { return data_.size(); }
 };
@@ -455,7 +455,7 @@ public:
 //}
 
 template<typename T, Major major>
-void VectorField3D<T, major>::resize(int ni, int nj, int nk, int nl, int ngg) {
+void VectorField3D<T, major>::resize(int ni, int nj, int nk, int nl, int ngg, T&& t) {
   ng = ngg;
   n1 = ni + 2 * ngg;
   n2 = nj + 2 * ngg;
@@ -471,7 +471,7 @@ void VectorField3D<T, major>::resize(int ni, int nj, int nk, int nl, int ngg) {
     disp1 = n2 * disp2;
     dispt = (disp1 + disp2 + 1) * ng;
   }
-  data_.resize(n1 * n2 * n3 * n4);
+  data_.resize(n1 * n2 * n3 * n4, t);
   n1 = ni;
   n2 = nj;
   n3 = nk;

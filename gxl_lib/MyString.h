@@ -20,4 +20,7 @@ void trim_left(std::string& string);
 void read_until(std::ifstream& file, std::string& input, std::string&& to_find, Case u_l=Case::keep);
 
 std::string to_upper(std::string& str);
+std::string to_upper(const std::string& str);
+
+std::string read_str(FILE* file);
 }

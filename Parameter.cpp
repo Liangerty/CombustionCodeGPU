@@ -11,12 +11,12 @@ cfd::Parameter::Parameter(const MpiParallel &mpi_parallel) {
   bool_parameters["parallel"] = cfd::MpiParallel::parallel;
 
   // Used for continue computing, record some info about the current simulation
-  const std::filesystem::path out_dir("output/message");
-  if (!exists(out_dir))
-    create_directories(out_dir);
-  std::ofstream ngg_out(out_dir.string()+"/ngg.txt");
-  ngg_out<<get_int("ngg");
-  ngg_out.close();
+//  const std::filesystem::path out_dir("output/message");
+//  if (!exists(out_dir))
+//    create_directories(out_dir);
+//  std::ofstream ngg_out(out_dir.string()+"/ngg.txt");
+//  ngg_out<<get_int("ngg");
+//  ngg_out.close();
 }
 
 cfd::Parameter::Parameter(const std::string &filename) {
@@ -36,6 +36,8 @@ void cfd::Parameter::read_param_from_file() {
     read_one_file(file);
     file.close();
   }
+
+  int_parameters.emplace("step",0);
 
   int_parameters.emplace("ngg", 2);
   integer inviscid_tag = get_int("inviscid_scheme");

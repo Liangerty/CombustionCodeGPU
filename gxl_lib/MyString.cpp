@@ -60,3 +60,23 @@ std::string gxl::to_upper(std::string& str) {
     ch = std::toupper(ch);
   return str;
 }
+
+std::string gxl::read_str(FILE* file) {
+  int value = 0;
+  std::string str;
+  while (true) {
+    fread(&value, sizeof(int), 1, file);
+    const char ch = static_cast<char>(value);
+    if (ch == '\0')
+      break;
+    str += ch;
+  }
+  return str;
+}
+
+std::string gxl::to_upper(const std::string &str) {
+  std::string str_upper{str};
+  for (auto& ch:str_upper)
+    ch=std::toupper(ch);
+  return str_upper;
+}
