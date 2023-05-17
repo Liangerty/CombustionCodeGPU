@@ -1,5 +1,4 @@
 #include "Initialize.h"
-#include "Define.h"
 #include "Mesh.h"
 #include <fstream>
 #include "gxl_lib/MyString.h"
@@ -25,69 +24,31 @@ void cfd::initialize_basic_variables(Parameter &parameter, const Mesh &mesh, std
 
 void
 cfd::initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vector<Field> &field, ChemData &chem_data) {
-  // First read the initialization file to see if some patches are needed.
-  std::ifstream init_file("input_files/setup/8_initialization.txt");
-  std::string input{}, key{};
-  int group{0}, tot_group{1};
+  // First, find out how many groups of initial conditions are needed.
+  const integer tot_group{parameter.get_int("groups_init")};
   std::vector<Inflow> groups_inflow;
-  std::vector<real> xs{0}, xe{0}, ys{0}, ye{0}, zs{0}, ze{0};
-  std::istringstream line(input);
-  while (gxl::getline_to_stream(init_file, input, line, gxl::Case::lower)) {
-    line >> key;
-    if (key == "//") continue;
-    if (key == "int") {
-      line >> key >> key >> tot_group;
-      break;
-    }
-  }
+  const std::string default_init=parameter.get_string("default_init");
+//  auto& default_cond=parameter.get_struct(default_init);
+  Inflow default_inflow(parameter.get_struct(default_init), chem_data.spec);
+  groups_inflow.push_back(default_inflow);
 
-  gxl::read_until(init_file, input, "label", gxl::Case::lower);
-  while (group < tot_group) {
-    if (input.rfind("end", 0) == 0) break; //input.starts_with("end")
-    gxl::to_stringstream(input, line);
-    int label{0};
-    line >> key >> label;
-    Inflow this_cond(label);
-
-    bool found{false};
-    std::string input2{};
-    std::ifstream inflow_file("./input_files/setup/6_inflow.txt");
-    while (!found) {
-      gxl::read_until(inflow_file, input2, "label", gxl::Case::lower);
-      if (input2.rfind("end", 0) == 0) break; //input2.starts_with("end")
-      gxl::to_stringstream(input2, line);
-      int label2{0};
-      line >> key >> label2;
-      if (label2 == label) {
-        this_cond.register_boundary_condition(inflow_file, parameter, chem_data.spec);
-        found = true;
+  std::vector<real> xs{}, xe{}, ys{}, ye{}, zs{}, ze{};
+  if (tot_group>1){
+    for (integer l=0;l<tot_group-1;++l){
+      auto patch_struct_name{fmt::format("init_cond_{}",l)};
+      auto& patch_cond=parameter.get_struct(patch_struct_name);
+      xs.push_back(std::get<real>(patch_cond.at("x0")));
+      xe.push_back(std::get<real>(patch_cond.at("x1")));
+      ys.push_back(std::get<real>(patch_cond.at("y0")));
+      ye.push_back(std::get<real>(patch_cond.at("y1")));
+      zs.push_back(std::get<real>(patch_cond.at("z0")));
+      ze.push_back(std::get<real>(patch_cond.at("z1")));
+      if (patch_cond.find("label")!=patch_cond.cend()){
+        groups_inflow.emplace_back(parameter.get_struct(std::get<std::string>(patch_cond.at("label"))),chem_data.spec);
+      }else{
+        groups_inflow.emplace_back(parameter.get_struct(patch_struct_name),chem_data.spec);
       }
     }
-    groups_inflow.push_back(this_cond);
-    ++group;
-
-    if (group > 1) {
-      real xx{0}, yy{0};
-      gxl::getline_to_stream(init_file, input, line);
-      line >> key >> key >> key >> xx >> yy;
-      xs.push_back(xx);
-      xe.push_back(yy);
-      gxl::getline_to_stream(init_file, input, line);
-      line >> key >> key >> key >> xx >> yy;
-      ys.push_back(xx);
-      ye.push_back(yy);
-      gxl::getline_to_stream(init_file, input, line);
-      line >> key >> key >> key >> xx >> yy;
-      zs.push_back(xx);
-      ze.push_back(yy);
-    }
-    // Normally, there should be a set of reference values for computing the postprocess variables such as cf and qw, etc.
-    // But I consider moving all postprocesses to a Postprocess executable, thus I would not set these up currently.
-    //else {
-    //  // This is the 1st group of inflow. Set as reference values by default.
-    //  this_cond.set_as_reference(parameter);
-    //}
-    gxl::read_until(init_file, input, "label", gxl::Case::lower);
   }
 
   // Start to initialize
@@ -361,23 +322,8 @@ void cfd::initialize_spec_from_inflow(cfd::Parameter &parameter, const cfd::Mesh
   // If the need for initialize species in groups is strong,
   // then we implement it just by copying the previous function "initialize_from_start",
   // which should be easy.
-  bool found{false};
-  std::string input2{}, key{};
-  std::istringstream line(input2);
-  std::ifstream inflow_file("./input_files/setup/6_inflow.txt");
-  constexpr integer label{5};
-  Inflow inflow(label);
-  while (!found) {
-    gxl::read_until(inflow_file, input2, "label", gxl::Case::lower);
-    if (input2.rfind("end", 0) == 0) break; //input2.starts_with("end")
-    gxl::to_stringstream(input2, line);
-    int label2{0};
-    line >> key >> label2;
-    if (label2 == label) {
-      inflow.register_boundary_condition(inflow_file, parameter, chem_data.spec);
-      found = true;
-    }
-  }
+  const std::string default_init=parameter.get_string("default_init");
+  Inflow inflow(parameter.get_struct(default_init), chem_data.spec);
   for (int blk = 0; blk < mesh.n_block; ++blk) {
     const integer mx{mesh[blk].mx},my{mesh[blk].my},mz{mesh[blk].mz};
     const auto n_spec = parameter.get_int("n_spec");

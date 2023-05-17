@@ -100,8 +100,22 @@ cfd::Inflow::Inflow(integer type_label, std::ifstream &file, Species &spec) : la
 //  reynolds = density * velocity * parameter.get_real("referenceLength") / viscosity;
 }
 
+void cfd::Inflow::copy_to_gpu(Inflow *d_inflow, Species &spec) {
+  const integer n_spec{spec.n_spec};
+  real* hY=new real[n_spec];
+  for (integer l=0;l<n_spec;++l){
+    hY[l]=yk[l];
+  }
+  delete[]yk;
+  cudaMalloc(&yk, n_spec * sizeof(real));
+  cudaMemcpy(yk, hY, n_spec * sizeof(real), cudaMemcpyHostToDevice);
+
+  cudaMemcpy(d_inflow, this, sizeof(Inflow), cudaMemcpyHostToDevice);
+}
+
 template<typename BCType>
-void register_bc(BCType *&bc, int n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species) {
+void register_bc(BCType *&bc, int n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species,
+                 Parameter &parameter) {
   if (!(n_bc > 0)) {
     return;
   }
@@ -117,73 +131,47 @@ void register_bc(BCType *&bc, int n_bc, std::vector<integer> &indices, BCInfo *&
 }
 
 template<>
-void register_bc<Wall>(Wall *&walls, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species) {
+void register_bc<Wall>(Wall *&walls, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species, Parameter &parameter) {
   if (!(n_bc > 0)) {
     return;
   }
 
   cudaMalloc(&walls, n_bc * sizeof(Wall));
   bc_info = new BCInfo[n_bc];
-  std::ifstream bc_file("./input_files/setup/7_wall.txt");
-  integer counter = 0;
-  std::string input{}, type{};
-  integer bc_label{};
-  std::istringstream line(input);
-  gxl::read_until(bc_file, input, "label", gxl::Case::lower);
-  while (counter < n_bc) {
-    if (input.rfind("end", 0) == 0) {//input.starts_with("end")
-      break;
+  for (integer i = 0; i < n_bc; ++i){
+    const integer index=indices[i];
+    for (auto& bc_name:parameter.get_string_array("boundary_conditions")){
+      auto& bc=parameter.get_struct(bc_name);
+      integer bc_label=std::get<integer>(bc.at("label"));
+      if (index!=bc_label)
+        continue;
+      Wall wall(bc);
+      bc_info[i].label=bc_label;
+      cudaMemcpy(&(walls[i]), &wall, sizeof(Wall), cudaMemcpyHostToDevice);
     }
-    gxl::to_stringstream(input, line);
-    line >> type >> bc_label;
-    integer idx = 0;
-    for (integer i = 0; i < n_bc; ++i) {
-      if (indices[i] == bc_label) {
-        idx = i;
-        break;
-      }
-    }
-    Wall wall(bc_label, bc_file);
-    bc_info[idx].label = bc_label;
-    cudaMemcpy(&(walls[idx]), &wall, sizeof(Wall), cudaMemcpyHostToDevice);
-    ++counter;
   }
-  bc_file.close();
 }
 
 template<>
-void register_bc<Inflow>(Inflow *&inflows, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species) {
+void register_bc<Inflow>(Inflow *&inflows, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species, Parameter &parameter) {
   if (!(n_bc > 0)) {
     return;
   }
 
   cudaMalloc(&inflows, n_bc * sizeof(Inflow));
   bc_info = new BCInfo[n_bc];
-  std::ifstream bc_file("./input_files/setup/6_inflow.txt");
-  int counter{0};
-  std::string input{}, type{};
-  integer bc_label{};
-  std::istringstream line(input);
-  gxl::read_until(bc_file, input, "label", gxl::Case::lower);
-  while (counter < n_bc) {
-    if (input.rfind("end", 0) == 0) {//input.starts_with("end")
-      break;
+  for (integer i = 0; i < n_bc; ++i) {
+    const integer index=indices[i];
+    for (auto& bc_name:parameter.get_string_array("boundary_conditions")){
+      auto& bc=parameter.get_struct(bc_name);
+      integer bc_label=std::get<integer>(bc.at("label"));
+      if (index!=bc_label)
+        continue;
+      bc_info[i].label=bc_label;
+      Inflow inflow(bc, species);
+      inflow.copy_to_gpu(&(inflows[i]), species);
     }
-    gxl::to_stringstream(input, line);
-    line >> type >> bc_label;
-    integer idx = 0;
-    for (integer i = 0; i < n_bc; ++i) {
-      if (indices[i] == bc_label) {
-        idx = i;
-        break;
-      }
-    }
-    bc_info[idx].label = bc_label;
-    Inflow inflow(bc_label, bc_file, species);
-    cudaMemcpy(&(inflows[idx]), &inflow, sizeof(Inflow), cudaMemcpyHostToDevice);
-    ++counter;
   }
-  bc_file.close();
 }
 
 void DBoundCond::link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) const {
@@ -312,71 +300,8 @@ void DBoundCond::apply_boundary_conditions(const Block &block, Field &field, DPa
     }
   }
 }
-//void DBoundCond::apply_boundary_conditions(const Mesh &mesh, std::vector<Field> &field, DParameter *param) const {
-//  // Boundary conditions are applied in the order of priority, which with higher priority is applied later.
-//  // Finally, the communication between faces will be carried out after these bc applied
-//  // Priority: (-1 - inner faces >) 2-wall > 3-symmetry > 5-inflow > 6-outflow > 4-farfield
-//
-//  // 4-farfield
-//
-//  // 6-outflow
-//  for (size_t l = 0; l < n_outflow; l++) {
-//    const auto nb = outflow_info[l].n_boundary;
-//    for (size_t i = 0; i < nb; i++) {
-//      auto [i_zone, i_face] = outflow_info[l].boundary[i];
-//      const auto &h_f = mesh[i_zone].boundary[i_face];
-//      const auto ngg = mesh[i_zone].ngg;
-//      uint tpb[3], bpg[3];
-//      for (size_t j = 0; j < 3; j++) {
-//        auto n_point = h_f.range_end[j] - h_f.range_start[j] + 1;
-//        tpb[j] = n_point <= (2 * ngg + 1) ? 1 : 16;
-//        bpg[j] = (n_point - 1) / tpb[j] + 1;
-//      }
-//      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-//      apply_outflow<<<BPG, TPB>>>(field[i_zone].d_ptr, i_face);
-//    }
-//  }
-//
-//  // 5-inflow
-//  for (size_t l = 0; l < n_inflow; l++) {
-//    const auto nb = inflow_info[l].n_boundary;
-//    for (size_t i = 0; i < nb; i++) {
-//      auto [i_zone, i_face] = inflow_info[l].boundary[i];
-//      const auto &hf = mesh[i_zone].boundary[i_face];
-//      const auto ngg = mesh[i_zone].ngg;
-//      uint tpb[3], bpg[3];
-//      for (size_t j = 0; j < 3; j++) {
-//        auto n_point = hf.range_end[j] - hf.range_start[j] + 1;
-//        tpb[j] = n_point <= (2 * ngg + 1) ? 1 : 16;
-//        bpg[j] = (n_point - 1) / tpb[j] + 1;
-//      }
-//      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-//      apply_inflow<<<BPG, TPB>>>(field[i_zone].d_ptr, &inflow[l], param, i_face);
-//    }
-//  }
-//
-//  // 3-symmetry
-//
-//  // 2 - wall
-//  for (size_t l = 0; l < n_wall; l++) {
-//    const auto nb = wall_info[l].n_boundary;
-//    for (size_t i = 0; i < nb; i++) {
-//      auto [i_zone, i_face] = wall_info[l].boundary[i];
-//      const auto &hf = mesh[i_zone].boundary[i_face];
-//      const auto ngg = mesh[i_zone].ngg;
-//      uint tpb[3], bpg[3];
-//      for (size_t j = 0; j < 3; j++) {
-//        auto n_point = hf.range_end[j] - hf.range_start[j] + 1;
-//        tpb[j] = n_point <= (2 * ngg + 1) ? 1 : 16;
-//        bpg[j] = (n_point - 1) / tpb[j] + 1;
-//      }
-//      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-//      apply_wall<<<BPG, TPB>>>(field[i_zone].d_ptr, &wall[l], param, i_face);
-//    }
-//  }
-//}
 
-void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Species &species) {
+void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Species &species, Parameter &parameter) {
   std::vector<integer> bc_labels;
   // Count the number of distinct boundary conditions
   for (auto i = 0; i < mesh.n_block; i++) {
@@ -394,25 +319,16 @@ void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Spe
       }
     }
   }
-  // Open the file containing non-default bc info and read them
-  std::ifstream bc_file("./input_files/setup/5_boundary_condition.txt");
-  std::string input{}, type{}, bc_name{};
-  integer bc_label{};
-  std::istringstream line(input);
+  // Initialize the inflow and wall condtions which are different among cases.
   std::vector<integer> wall_idx, inflow_idx, outflow_idx;
-  while (gxl::getline_to_stream(bc_file, input, line, gxl::Case::lower)) {
-    line >> type;
-    if (input.rfind("//", 0) == 0) {//input.starts_with("//")
-      continue;
-    }
-    if (type == "end") {
-      break;
-    }
-    line >> bc_name >> bc_label;
+  auto& bcs=parameter.get_string_array("boundary_conditions");
+  for (auto& bc_name:bcs){
+    auto& bc=parameter.get_struct(bc_name);
+    auto label=std::get<integer>(bc.at("label"));
 
     auto this_iter = bc_labels.end();
     for (auto iter = bc_labels.begin(); iter != bc_labels.end(); ++iter) {
-      if (*iter == bc_label) {
+      if (*iter == label) {
         this_iter = iter;
         break;
       }
@@ -422,36 +338,24 @@ void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Spe
              bc_name.c_str());
     } else {
       bc_labels.erase(this_iter);
+      auto type=std::get<std::string>(bc.at("name"));
       if (type == "wall") {
-        wall_idx.push_back(bc_label);
+        wall_idx.push_back(label);
         ++n_wall;
       } else if (type == "inflow") {
-        inflow_idx.push_back(bc_label);
+        inflow_idx.push_back(label);
         ++n_inflow;
       } else if (type == "outflow") {
-        outflow_idx.push_back(bc_label);
+        outflow_idx.push_back(label);
         ++n_outflow;
       }
     }
   }
-  bc_file.close();
-  for (int lab: bc_labels) {
-    if (lab == 2) {
-      wall_idx.push_back(lab);
-      ++n_wall;
-    } else if (lab == 5) {
-      inflow_idx.push_back(lab);
-      ++n_inflow;
-    } else if (lab == 6) {
-      outflow_idx.push_back(lab);
-      ++n_outflow;
-    }
-  }
 
   // Read specific conditions
-  register_bc<Wall>(wall, n_wall, wall_idx, wall_info, species);
-  register_bc<Inflow>(inflow, n_inflow, inflow_idx, inflow_info, species);
-  register_bc<Outflow>(outflow, n_outflow, outflow_idx, outflow_info, species);
+  register_bc<Wall>(wall, n_wall, wall_idx, wall_info, species,parameter);
+  register_bc<Inflow>(inflow, n_inflow, inflow_idx, inflow_info, species,parameter);
+  register_bc<Outflow>(outflow, n_outflow, outflow_idx, outflow_info, species, parameter);
 
   link_bc_to_boundaries(mesh,field);
 }

@@ -26,7 +26,7 @@ struct Field;
 struct DBoundCond {
   DBoundCond()=default;
 
-  void initialize_bc_on_GPU(Mesh &mesh, std::vector<Field>& field, Species &species);
+  void initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Species &species, Parameter &parameter);
 
   void link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) const;
 

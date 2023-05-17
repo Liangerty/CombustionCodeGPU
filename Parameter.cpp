@@ -3,20 +3,13 @@
 #include <sstream>
 #include "Parallel.h"
 #include <filesystem>
+#include "gxl_lib/MyString.h"
 
 cfd::Parameter::Parameter(const MpiParallel &mpi_parallel) {
   read_param_from_file();
   int_parameters["myid"] = mpi_parallel.my_id;
   //int_parameters["n_proc"] = mpi_parallel.n_proc; // Currently commented, assuming the n_proc is not needed outside the class MpiParallel
   bool_parameters["parallel"] = cfd::MpiParallel::parallel;
-
-  // Used for continue computing, record some info about the current simulation
-//  const std::filesystem::path out_dir("output/message");
-//  if (!exists(out_dir))
-//    create_directories(out_dir);
-//  std::ofstream ngg_out(out_dir.string()+"/ngg.txt");
-//  ngg_out<<get_int("ngg");
-//  ngg_out.close();
 }
 
 cfd::Parameter::Parameter(const std::string &filename) {
@@ -37,7 +30,7 @@ void cfd::Parameter::read_param_from_file() {
     file.close();
   }
 
-  int_parameters.emplace("step",0);
+  int_parameters.emplace("step", 0);
 
   int_parameters.emplace("ngg", 2);
   integer inviscid_tag = get_int("inviscid_scheme");
@@ -63,7 +56,7 @@ void cfd::Parameter::read_one_file(std::ifstream &file) {
       int val{};
       line >> val;
       int_parameters.emplace(std::make_pair(key, val));
-    } else if (type == "double") {
+    } else if (type == "real") {
       real val{};
       line >> val;
       real_parameters.emplace(std::make_pair(key, val));
@@ -75,7 +68,80 @@ void cfd::Parameter::read_one_file(std::ifstream &file) {
       std::string val{};
       line >> val;
       string_parameters.emplace(std::make_pair(key, val));
+    } else if (type == "array") {
+      if (key == "real") {
+        std::vector<real> arr;
+        std::string name{temp};
+        line >> temp >> temp; // = {
+        while (read_line_to_array(line, arr)) {
+          gxl::getline_to_stream(file, input, line);
+        }
+        real_array.emplace(std::make_pair(name, arr));
+      } else if (key == "string") {
+        std::vector<std::string> arr;
+        std::string name{temp};
+        line >> temp >> temp;
+        while (read_line_to_array(line, arr)) {
+          gxl::getline_to_stream(file, input, line);
+        }
+        string_array.emplace(std::make_pair(name, arr));
+      }
+    } else if (type == "struct") {
+      std::string name{key};
+      auto the_struct = read_struct(file);
+      struct_array.emplace(std::make_pair(name, the_struct));
     }
   }
   file.close();
+}
+
+template<typename T>
+integer cfd::Parameter::read_line_to_array(std::istringstream &line, std::vector<T> &arr) {
+  std::string temp{};
+  while (line >> temp) {
+    if (temp == "}") {
+      // Which means the array has been read
+      return 0;
+    }
+    if (temp == "//") {
+      // which means the array is not over, but values are on the next line
+      break;
+    }
+    T val{};
+    if constexpr (std::is_same_v<T, real>) {
+      val = std::stod(temp);
+    } else if constexpr (std::is_same_v<T, integer>) {
+      val = std::stoi(temp);
+    } else if constexpr (std::is_same_v<T, std::string>) {
+      val = temp;
+    }
+    arr.push_back(val);
+  }
+  return 1; // Which means we need to read the next line
+}
+
+std::map<std::string, std::variant<std::string, integer, real>> cfd::Parameter::read_struct(std::ifstream &file) {
+  std::map<std::string, std::variant<std::string, integer, real>> struct_to_read;
+  std::string input{}, key{}, temp{};
+  std::istringstream line(input);
+  while (gxl::getline_to_stream(file, input, line)) {
+    line >> key;
+    if (key == "}") { // the "}" must be placed on a separate line.
+      break;
+    }
+    if (key == "string") {
+      std::string val{};
+      line >> key >> temp >> val;
+      struct_to_read.emplace(std::make_pair(key, val));
+    } else if (key == "int") {
+      integer val{};
+      line >> key >> temp >> val;
+      struct_to_read.emplace(std::make_pair(key, val));
+    } else if (key == "real") {
+      real val{};
+      line >> key >> temp >> val;
+      struct_to_read.emplace(std::make_pair(key, val));
+    }
+  }
+  return struct_to_read;
 }

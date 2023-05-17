@@ -9,10 +9,13 @@
 namespace cfd {
 struct Inflow {
   explicit Inflow(integer type_label);
+  explicit Inflow(const std::map<std::string, std::variant<std::string, integer, real>> &info,
+                  Species &spec);
 
 #ifdef GPU
 
   Inflow(integer type_label, std::ifstream &file, Species &spec);
+  void copy_to_gpu(Inflow *d_inflow, Species &spec);
 
 #endif
 
@@ -37,6 +40,7 @@ struct Inflow {
 
 struct Wall {
   explicit Wall(integer type_label, std::ifstream &bc_file);
+  explicit Wall(const std::map<std::string, std::variant<std::string, integer, real>> &info);
 
   enum class ThermalType { isothermal, adiabatic };
 

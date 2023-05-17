@@ -45,7 +45,7 @@ cfd::Driver::Driver(Parameter &parameter, Mesh &mesh_, ChemData &chem_data) : my
   for (integer blk = 0; blk < mesh.n_block; ++blk) {
     field[blk].setup_device_memory(parameter);
   }
-  bound_cond.initialize_bc_on_GPU(mesh_, field, chem_data.spec);
+  bound_cond.initialize_bc_on_GPU(mesh_, field, chem_data.spec, parameter);
   cudaMalloc(&inviscid_scheme, sizeof(InviscidScheme *));
   cudaMalloc(&viscous_scheme, sizeof(ViscousScheme *));
   cudaMalloc(&temporal_scheme, sizeof(TemporalScheme *));
