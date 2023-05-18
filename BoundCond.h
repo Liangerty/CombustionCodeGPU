@@ -19,8 +19,6 @@ struct Inflow {
 
 #endif
 
-  void register_boundary_condition(std::ifstream &file, Parameter &parameter, Species &spec);
-
   [[nodiscard]] std::tuple<real, real, real, real, real, real> var_info() const;
 
   integer label = 5;

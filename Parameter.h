@@ -47,7 +47,7 @@ public:
 
   std::string &get_string(const std::string &name) { return string_parameters.at(name); }
 
-  [[nodiscard]] const std::string &get_string(const std::string &name) const { return string_parameters.at(name); }
+//  [[nodiscard]] const std::string &get_string(const std::string &name) const { return string_parameters.at(name); }
 
   [[nodiscard]] const auto& get_struct(const std::string &name)const{return struct_array.at(name);}
 
@@ -80,6 +80,6 @@ private:
   template<typename T>
   integer read_line_to_array(std::istringstream& line, std::vector<T>& arr);
 
-  std::map<std::string, std::variant<std::string, integer, real>> read_struct(std::ifstream &file);
+  static std::map<std::string, std::variant<std::string, integer, real>> read_struct(std::ifstream &file);
 };
 }

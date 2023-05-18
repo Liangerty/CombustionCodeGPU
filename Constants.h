@@ -8,7 +8,6 @@
  *
  **/
 namespace cfd {
-constexpr double SMALL = std::numeric_limits<double>::epsilon();
 // Avogadro's Number [kmole^{-1}]
 constexpr double avogadro = 6.02214076e26;
 // Elementary charge  [C]

@@ -102,13 +102,15 @@ cfd::Inflow::Inflow(integer type_label, std::ifstream &file, Species &spec) : la
 
 void cfd::Inflow::copy_to_gpu(Inflow *d_inflow, Species &spec) {
   const integer n_spec{spec.n_spec};
-  real* hY=new real[n_spec];
-  for (integer l=0;l<n_spec;++l){
-    hY[l]=yk[l];
+#if MULTISPECIES==1
+  real *hY = new real[n_spec];
+  for (integer l = 0; l < n_spec; ++l) {
+    hY[l] = yk[l];
   }
   delete[]yk;
   cudaMalloc(&yk, n_spec * sizeof(real));
   cudaMemcpy(yk, hY, n_spec * sizeof(real), cudaMemcpyHostToDevice);
+#endif
 
   cudaMemcpy(d_inflow, this, sizeof(Inflow), cudaMemcpyHostToDevice);
 }
@@ -131,29 +133,33 @@ void register_bc(BCType *&bc, int n_bc, std::vector<integer> &indices, BCInfo *&
 }
 
 template<>
-void register_bc<Wall>(Wall *&walls, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species, Parameter &parameter) {
+void register_bc<Wall>(Wall *&walls, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species,
+                       Parameter &parameter) {
   if (!(n_bc > 0)) {
     return;
   }
 
   cudaMalloc(&walls, n_bc * sizeof(Wall));
   bc_info = new BCInfo[n_bc];
-  for (integer i = 0; i < n_bc; ++i){
-    const integer index=indices[i];
-    for (auto& bc_name:parameter.get_string_array("boundary_conditions")){
-      auto& bc=parameter.get_struct(bc_name);
-      integer bc_label=std::get<integer>(bc.at("label"));
-      if (index!=bc_label)
+  for (integer i = 0; i < n_bc; ++i) {
+    const integer index = indices[i];
+    for (auto &bc_name: parameter.get_string_array("boundary_conditions")) {
+      auto &bc = parameter.get_struct(bc_name);
+      integer bc_label = std::get<integer>(bc.at("label"));
+      if (index != bc_label) {
         continue;
+      }
       Wall wall(bc);
-      bc_info[i].label=bc_label;
+      bc_info[i].label = bc_label;
       cudaMemcpy(&(walls[i]), &wall, sizeof(Wall), cudaMemcpyHostToDevice);
     }
   }
 }
 
 template<>
-void register_bc<Inflow>(Inflow *&inflows, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species, Parameter &parameter) {
+void
+register_bc<Inflow>(Inflow *&inflows, integer n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species,
+                    Parameter &parameter) {
   if (!(n_bc > 0)) {
     return;
   }
@@ -161,20 +167,21 @@ void register_bc<Inflow>(Inflow *&inflows, integer n_bc, std::vector<integer> &i
   cudaMalloc(&inflows, n_bc * sizeof(Inflow));
   bc_info = new BCInfo[n_bc];
   for (integer i = 0; i < n_bc; ++i) {
-    const integer index=indices[i];
-    for (auto& bc_name:parameter.get_string_array("boundary_conditions")){
-      auto& bc=parameter.get_struct(bc_name);
-      integer bc_label=std::get<integer>(bc.at("label"));
-      if (index!=bc_label)
+    const integer index = indices[i];
+    for (auto &bc_name: parameter.get_string_array("boundary_conditions")) {
+      auto &bc = parameter.get_struct(bc_name);
+      integer bc_label = std::get<integer>(bc.at("label"));
+      if (index != bc_label) {
         continue;
-      bc_info[i].label=bc_label;
+      }
+      bc_info[i].label = bc_label;
       Inflow inflow(bc, species);
       inflow.copy_to_gpu(&(inflows[i]), species);
     }
   }
 }
 
-void DBoundCond::link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) const {
+void DBoundCond::link_bc_to_boundaries(Mesh &mesh, std::vector<Field> &field) const {
   const integer n_block{mesh.n_block};
   auto *i_wall = new integer[n_block];
   auto *i_inflow = new integer[n_block];
@@ -207,13 +214,14 @@ void DBoundCond::link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) co
     link_boundary_and_condition(mesh[i].boundary, inflow_info, n_inflow, i_inflow, i);
     link_boundary_and_condition(mesh[i].boundary, outflow_info, n_outflow, i_outflow, i);
   }
-  for (auto i = 0; i < n_block; i++){
+  for (auto i = 0; i < n_block; i++) {
     for (size_t l = 0; l < n_wall; l++) {
       const auto nb = wall_info[l].n_boundary;
       for (size_t m = 0; m < nb; m++) {
-        auto i_zone=wall_info[l].boundary[m].x;
-        if (i_zone!=i)
+        auto i_zone = wall_info[l].boundary[m].x;
+        if (i_zone != i) {
           continue;
+        }
         auto &b = mesh[i].boundary[wall_info[l].boundary[m].y];
         for (int q = 0; q < 3; ++q) {
           if (q == b.face) continue;
@@ -243,8 +251,9 @@ void DBoundCond::apply_boundary_conditions(const Block &block, Field &field, DPa
     const auto nb = outflow_info[l].n_boundary;
     for (size_t i = 0; i < nb; i++) {
       auto [i_zone, i_face] = outflow_info[l].boundary[i];
-      if (i_zone!=block.block_id)
+      if (i_zone != block.block_id) {
         continue;
+      }
       const auto &h_f = block.boundary[i_face];
       const auto ngg = block.ngg;
       uint tpb[3], bpg[3];
@@ -263,8 +272,9 @@ void DBoundCond::apply_boundary_conditions(const Block &block, Field &field, DPa
     const auto nb = inflow_info[l].n_boundary;
     for (size_t i = 0; i < nb; i++) {
       auto [i_zone, i_face] = inflow_info[l].boundary[i];
-      if (i_zone!=block.block_id)
+      if (i_zone != block.block_id) {
         continue;
+      }
       const auto &hf = block.boundary[i_face];
       const auto ngg = block.ngg;
       uint tpb[3], bpg[3];
@@ -285,8 +295,9 @@ void DBoundCond::apply_boundary_conditions(const Block &block, Field &field, DPa
     const auto nb = wall_info[l].n_boundary;
     for (size_t i = 0; i < nb; i++) {
       auto [i_zone, i_face] = wall_info[l].boundary[i];
-      if (i_zone!=block.block_id)
+      if (i_zone != block.block_id) {
         continue;
+      }
       const auto &hf = block.boundary[i_face];
       const auto ngg = block.ngg;
       uint tpb[3], bpg[3];
@@ -321,10 +332,10 @@ void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Spe
   }
   // Initialize the inflow and wall condtions which are different among cases.
   std::vector<integer> wall_idx, inflow_idx, outflow_idx;
-  auto& bcs=parameter.get_string_array("boundary_conditions");
-  for (auto& bc_name:bcs){
-    auto& bc=parameter.get_struct(bc_name);
-    auto label=std::get<integer>(bc.at("label"));
+  auto &bcs = parameter.get_string_array("boundary_conditions");
+  for (auto &bc_name: bcs) {
+    auto &bc = parameter.get_struct(bc_name);
+    auto label = std::get<integer>(bc.at("label"));
 
     auto this_iter = bc_labels.end();
     for (auto iter = bc_labels.begin(); iter != bc_labels.end(); ++iter) {
@@ -338,7 +349,7 @@ void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Spe
              bc_name.c_str());
     } else {
       bc_labels.erase(this_iter);
-      auto type=std::get<std::string>(bc.at("name"));
+      auto type = std::get<std::string>(bc.at("type"));
       if (type == "wall") {
         wall_idx.push_back(label);
         ++n_wall;
@@ -351,13 +362,25 @@ void DBoundCond::initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Spe
       }
     }
   }
+  for (int lab: bc_labels) {
+    if (lab == 2) {
+      wall_idx.push_back(lab);
+      ++n_wall;
+    } else if (lab == 5) {
+      inflow_idx.push_back(lab);
+      ++n_inflow;
+    } else if (lab == 6) {
+      outflow_idx.push_back(lab);
+      ++n_outflow;
+    }
+  }
 
   // Read specific conditions
-  register_bc<Wall>(wall, n_wall, wall_idx, wall_info, species,parameter);
-  register_bc<Inflow>(inflow, n_inflow, inflow_idx, inflow_info, species,parameter);
+  register_bc<Wall>(wall, n_wall, wall_idx, wall_info, species, parameter);
+  register_bc<Inflow>(inflow, n_inflow, inflow_idx, inflow_info, species, parameter);
   register_bc<Outflow>(outflow, n_outflow, outflow_idx, outflow_info, species, parameter);
 
-  link_bc_to_boundaries(mesh,field);
+  link_bc_to_boundaries(mesh, field);
 }
 
 void count_boundary_of_type_bc(const std::vector<Boundary> &boundary, integer n_bc, integer *sep, integer blk_idx,
@@ -403,7 +426,7 @@ void link_boundary_and_condition(const std::vector<Boundary> &boundary, BCInfo *
 __global__ void apply_outflow(DZone *zone, integer i_face) {
   const integer ngg = zone->ngg;
   integer dir[]{0, 0, 0};
-  const auto& b=zone->boundary[i_face];
+  const auto &b = zone->boundary[i_face];
   dir[b.face] = b.direction;
   auto range_start = b.range_start, range_end = b.range_end;
   integer i = range_start[0] + (integer) (blockDim.x * blockIdx.x + threadIdx.x);
@@ -437,7 +460,7 @@ __global__ void apply_outflow(DZone *zone, integer i_face) {
 __global__ void apply_inflow(DZone *zone, Inflow *inflow, DParameter *param, integer i_face) {
   const integer ngg = zone->ngg;
   integer dir[]{0, 0, 0};
-  const auto& b=zone->boundary[i_face];
+  const auto &b = zone->boundary[i_face];
   dir[b.face] = b.direction;
   auto range_start = b.range_start, range_end = b.range_end;
   integer i = range_start[0] + (integer) (blockDim.x * blockIdx.x + threadIdx.x);
@@ -477,7 +500,7 @@ __global__ void apply_inflow(DZone *zone, Inflow *inflow, DParameter *param, int
 __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i_face) {
   const integer ngg = zone->ngg;
   integer dir[]{0, 0, 0};
-  const auto& b=zone->boundary[i_face];
+  const auto &b = zone->boundary[i_face];
   dir[b.face] = b.direction;
   auto range_start = b.range_start, range_end = b.range_end;
   integer i = range_start[0] + (integer) (blockDim.x * blockIdx.x + threadIdx.x);

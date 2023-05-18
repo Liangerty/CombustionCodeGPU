@@ -1,9 +1,9 @@
 #include "DParameter.h"
 #include "ChemData.h"
 
-cfd::DParameter::DParameter(cfd::Parameter &parameter, ChemData &chem_data) : myid{parameter.get_int("myid")},
+cfd::DParameter::DParameter(cfd::Parameter &parameter, ChemData &chem_data) : /*myid{parameter.get_int("myid")},
                                                                               dim{parameter.get_int("dimension")},
-                                                                              n_block(parameter.get_int("n_block")),
+                                                                              n_block(parameter.get_int("n_block")),*/
                                                                               inviscid_scheme{
                                                                                   parameter.get_int("inviscid_scheme")},
                                                                               reconstruction{
@@ -13,8 +13,8 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter, ChemData &chem_data) : my
                                                                                   parameter.get_int("viscous_order")},
                                                                               temporal_scheme{
                                                                                   parameter.get_int("temporal_scheme")},
-                                                                              output_screen(
-                                                                                  parameter.get_int("output_screen")),
+                                                                              /*output_screen(
+                                                                                  parameter.get_int("output_screen")),*/
                                                                               Pr(parameter.get_real("prandtl_number")),
                                                                               cfl(parameter.get_real("cfl")) {
 #if MULTISPECIES == 1

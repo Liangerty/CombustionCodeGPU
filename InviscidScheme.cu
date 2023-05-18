@@ -53,7 +53,7 @@ AUSMP::compute_inviscid_flux(DZone *zone, real *pv, const integer tid, DParamete
   const real c  = 0.5 * (std::sqrt(gamma_air*pl/rho_l) + std::sqrt(gamma_air * pr / rho_r));
 #endif
   const real mach_l = ul / c, mach_r = ur / c;
-  real mlp{0}, mrn{0}, plp{0}, prn{0}; // m for M, l/r for L/R, p/n for +/-. mlp=M_L^+
+  real mlp, mrn, plp, prn; // m for M, l/r for L/R, p/n for +/-. mlp=M_L^+
   if (std::abs(mach_l) > 1) {
     mlp = 0.5 * (mach_l + std::abs(mach_l));
     plp = mlp / mach_l;

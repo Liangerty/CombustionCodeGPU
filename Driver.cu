@@ -1,5 +1,4 @@
 #include "Driver.h"
-#include "Define.h"
 #include "DParameter.h"
 #include "Initialize.h"
 #include "InviscidScheme.cuh"
@@ -71,8 +70,7 @@ void cfd::Driver::initialize_computation() {
   // Second, apply boundary conditions to all boundaries, including face communication between faces
   for (integer b=0;b<mesh.n_block;++b)
     bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
-//  bound_cond.apply_boundary_conditions(mesh, field, param);
-  cudaDeviceSynchronize();
+//  cudaDeviceSynchronize();
   if (myid == 0) {
     fmt::print("Boundary conditions are applied successfully for initialization\n");
   }

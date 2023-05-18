@@ -28,7 +28,6 @@ cfd::initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vector<F
   const integer tot_group{parameter.get_int("groups_init")};
   std::vector<Inflow> groups_inflow;
   const std::string default_init=parameter.get_string("default_init");
-//  auto& default_cond=parameter.get_struct(default_init);
   Inflow default_inflow(parameter.get_struct(default_init), chem_data.spec);
   groups_inflow.push_back(default_inflow);
 

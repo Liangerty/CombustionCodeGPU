@@ -14,6 +14,6 @@ public:
 
   [[nodiscard]] double get_atom_weight() const;
 
-  static double get_atom_weight(const size_t &);
+//  static double get_atom_weight(const size_t &);
 };
 }

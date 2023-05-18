@@ -16,9 +16,6 @@ struct BCInfo {
 
 class Mesh;
 
-template<typename BCType>
-void register_bc(BCType *&bc, Parameter &parameter, int n_bc, std::vector<integer> &indices, BCInfo *&bc_info, Species &species);
-
 struct DZone;
 struct DParameter;
 struct Field;
@@ -31,7 +28,6 @@ struct DBoundCond {
   void link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) const;
 
   void apply_boundary_conditions(const Block &block, Field &field, DParameter *param) const;
-//  void apply_boundary_conditions(const Mesh &mesh, std::vector<Field> &field, DParameter *param) const;
 
   integer n_wall = 0, n_inflow = 0, n_outflow = 0;
   BCInfo *wall_info = nullptr;

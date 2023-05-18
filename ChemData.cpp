@@ -1,7 +1,6 @@
 #include "ChemData.h"
 
 #if MULTISPECIES == 1
-
 #include "fmt/core.h"
 #include "gxl_lib/MyString.h"
 #include "Element.h"
@@ -64,7 +63,9 @@ cfd::Species::Species(Parameter &parameter) {
   fmt::print("\n");
 #endif
 }
-#if MULTISPECIES==1
+
+#if MULTISPECIES == 1
+
 void cfd::Species::compute_cp(real temp, real *cp) const &{
   const real t2{temp * temp}, t3{t2 * temp}, t4{t3 * temp};
   for (int i = 0; i < n_spec; ++i) {
@@ -175,7 +176,7 @@ void cfd::Species::read_therm(Parameter &parameter) {
     // Read the thermodynamic fitting coefficients
     std::getline(therm_dat, input);
     std::string cs1{}, cs2{}, cs3{}, cs4{}, cs5{};
-    double c1{}, c2{}, c3{}, c4{}, c5{};
+    double c1, c2, c3, c4, c5;
     cs1.assign(input, 0, 15);
     cs2.assign(input, 15, 15);
     cs3.assign(input, 30, 15);
@@ -264,7 +265,9 @@ void cfd::Species::read_tran(Parameter &parameter) {
     }
   }
 }
+
 #endif
+
 cfd::Reaction::Reaction(Parameter &parameter) {}
 
 cfd::ChemData::ChemData(Parameter &parameter) : spec(parameter), reac(parameter) {}

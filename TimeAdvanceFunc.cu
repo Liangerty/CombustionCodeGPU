@@ -245,9 +245,9 @@ __global__ void cfd::viscous_flux_hv(cfd::DZone *zone, cfd::ViscousScheme **visc
 
 __global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param, TemporalScheme **temporal_scheme) {
   const integer extent[3]{zone->mx, zone->my, zone->mz};
-  const integer i=(blockDim.x*blockIdx.x+threadIdx.x);//(integer)
-  const integer j=(blockDim.y*blockIdx.y+threadIdx.y);//(integer)
-  const integer k=(blockDim.z*blockIdx.z+threadIdx.z);//(integer)
+  const integer i=blockDim.x*blockIdx.x+threadIdx.x;//(integer)
+  const integer j=blockDim.y*blockIdx.y+threadIdx.y;//(integer)
+  const integer k=blockDim.z*blockIdx.z+threadIdx.z;//(integer)
   if (i>=extent[0]||j>=extent[1]||k>=extent[2]) return;
 
   const auto& m{zone->metric(i, j, k)};

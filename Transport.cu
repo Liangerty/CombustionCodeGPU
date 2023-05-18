@@ -2,7 +2,6 @@
 #include "DParameter.h"
 #include "Field.h"
 #include "Constants.h"
-#include "gxl_lib/Matrix.hpp"
 
 __host__ __device__
 real cfd::Sutherland(real temperature) {

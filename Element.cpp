@@ -164,8 +164,4 @@ double Element::get_atom_weight() const {
   fmt::print("No such element. Please check if the input is reasonable.\n");
   return -1.0;
 }
-
-double Element::get_atom_weight(const size_t &i) {
-  return atomic_weight_table[i - 1].atomic_weight;
-}
 }

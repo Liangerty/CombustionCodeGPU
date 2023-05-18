@@ -13,7 +13,7 @@ public:
   __device__ explicit InviscidScheme(DParameter* param);
 
   __device__ virtual void
-  compute_inviscid_flux(DZone *zone, real *pv, const integer tid, DParameter *param, real *fc, real *metric,
+  compute_inviscid_flux(DZone *zone, real *pv, integer tid, DParameter *param, real *fc, real *metric,
                         real *jac) =0;
 
   ~InviscidScheme()=default;
@@ -25,7 +25,7 @@ public:
   __device__ explicit AUSMP(DParameter* param);
 
   __device__ void
-  compute_inviscid_flux(DZone *zone, real *pv, const integer tid, DParameter *param, real *fc, real *metric,
+  compute_inviscid_flux(DZone *zone, real *pv, integer tid, DParameter *param, real *fc, real *metric,
                         real *jac) override;
 
   ~AUSMP()=default;
