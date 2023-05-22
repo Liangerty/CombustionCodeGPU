@@ -151,7 +151,6 @@ void cfd::Field<mix_model, turb_method>::setup_device_memory(const Parameter &pa
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 void cfd::Field<mix_model, turb_method>::copy_data_from_device() {
-  printf("Copy data\n");
   const auto size=(block.mx+2*block.ngg)*(block.my+2*block.ngg)*(block.mz+2*block.ngg);
 
   cudaMemcpy(bv.data(),h_ptr->bv.data(),6*size*sizeof(real),cudaMemcpyDeviceToHost);

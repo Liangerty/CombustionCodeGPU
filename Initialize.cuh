@@ -31,8 +31,7 @@ void read_flowfield(Parameter &parameter, const Mesh &mesh, std::vector<Field<mi
  */
 template<MixtureModel mix_model, TurbMethod turb_method>
 std::vector<integer>
-identify_variable_labels(std::vector<std::string> &var_name, Species &species, Parameter &parameter,
-                         std::array<integer, 2> &old_data_info);
+identify_variable_labels(std::vector<std::string> &var_name, Species &species, std::array<integer, 2> &old_data_info);
 
 void read_one_useless_variable(FILE *fp, integer mx, integer my, integer mz, integer data_format);
 
@@ -71,7 +70,6 @@ initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vector<Field<
   if (tot_group > 1) {
     for (integer l = 0; l < tot_group - 1; ++l) {
       auto patch_struct_name = "init_cond_" + std::to_string(l);
-//      auto patch_struct_name{fmt::format("init_cond_{}",l)};
       auto &patch_cond = parameter.get_struct(patch_struct_name);
       xs.push_back(std::get<real>(patch_cond.at("x0")));
       xe.push_back(std::get<real>(patch_cond.at("x1")));
@@ -128,7 +126,7 @@ read_flowfield(cfd::Parameter &parameter, const cfd::Mesh &mesh, std::vector<Fie
   // The first one tells if species info exists, if exists (1), else, (0).
   // The 2nd one tells if turbulent var exists, if 0 (compute from laminar), 1(From SA), 2(From SST)
   std::array old_data_info{0,0};//,0
-  auto index_order = cfd::identify_variable_labels<mix_model, turb_method>(var_name, species, parameter,
+  auto index_order = cfd::identify_variable_labels<mix_model, turb_method>(var_name, species,
                                                                            old_data_info);
   const integer n_spec{species.n_spec};
 
@@ -292,8 +290,7 @@ read_flowfield(cfd::Parameter &parameter, const cfd::Mesh &mesh, std::vector<Fie
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 std::vector<integer>
-identify_variable_labels(std::vector<std::string> &var_name, Species &species, Parameter &parameter,
-                         std::array<integer, 2> &old_data_info) {
+identify_variable_labels(std::vector<std::string> &var_name, Species &species, std::array<integer, 2> &old_data_info) {
   std::vector<integer> labels;
   const integer n_spec = species.n_spec;
   for (auto &name: var_name) {

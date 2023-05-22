@@ -325,8 +325,8 @@ void Output<mix_model, turb_method>::print_field(integer step, int ngg) const {
         }
       }
     }
-    fclose(fp);
   }
+  fclose(fp);
 }
 
 //void write_str(const char *str, FILE *file);
