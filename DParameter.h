@@ -5,10 +5,11 @@
 #include "gxl_lib/Matrix.hpp"
 
 namespace cfd {
-struct ChemData;
+struct Species;
+struct Reaction;
 struct DParameter {
   DParameter()=default;
-  explicit DParameter(Parameter &parameter,ChemData& chem_data);
+  explicit DParameter(Parameter &parameter,Species& species, Reaction& reaction);
 
 //  integer myid = 0;   // The process id of this process
 //  integer dim = 3;  // The dimension of the simulation problem
@@ -22,7 +23,6 @@ struct DParameter {
   real Pr=0.72;
   real cfl=1;
   integer n_spec=0;
-#if MULTISPECIES==1
   real* mw = nullptr;
   ggxl::MatrixDyn<real> high_temp_coeff, low_temp_coeff;
   real* t_low = nullptr, * t_mid = nullptr, * t_high = nullptr;
@@ -31,6 +31,5 @@ struct DParameter {
   ggxl::MatrixDyn<real> WjDivWi_to_One4th;
   ggxl::MatrixDyn<real> sqrt_WiDivWjPl1Mul8;
   real Sc=0.9;
-#endif // MULTISPECIES==1
 };
 }

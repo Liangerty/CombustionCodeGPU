@@ -1,7 +1,7 @@
 #include "DParameter.h"
 #include "ChemData.h"
 
-cfd::DParameter::DParameter(cfd::Parameter &parameter, ChemData &chem_data) : /*myid{parameter.get_int("myid")},
+cfd::DParameter::DParameter(cfd::Parameter &parameter,Species& species, Reaction& reaction) : /*myid{parameter.get_int("myid")},
                                                                               dim{parameter.get_int("dimension")},
                                                                               n_block(parameter.get_int("n_block")),*/
                                                                               inviscid_scheme{
@@ -17,8 +17,7 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter, ChemData &chem_data) : /*
                                                                                   parameter.get_int("output_screen")),*/
                                                                               Pr(parameter.get_real("prandtl_number")),
                                                                               cfl(parameter.get_real("cfl")) {
-#if MULTISPECIES == 1
-  const auto &spec = chem_data.spec;
+  const auto &spec = species;
   n_spec = spec.n_spec;
   auto mem_sz = n_spec * sizeof(real);
   cudaMalloc(&mw, mem_sz);
@@ -46,5 +45,4 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter, ChemData &chem_data) : /*
   cudaMemcpy(sqrt_WiDivWjPl1Mul8.data(), spec.sqrt_WiDivWjPl1Mul8.data(),
              sqrt_WiDivWjPl1Mul8.size() * sizeof(real), cudaMemcpyHostToDevice);
   Sc = parameter.get_real("schmidt_number");
-#endif // MULTISPECIES==1
 }

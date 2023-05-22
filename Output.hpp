@@ -1,28 +1,79 @@
-// Although this file is purely on CPU, but because one of the included file is "Matrix.hpp", the CUDA part would be in
-// And the cuda_runtime.h is included, thus cu is needed instead of cpp
+#pragma once
 
-#include "Output.h"
-#include "fmt/core.h"
+#include <vector>
+#include "Parameter.h"
 #include "Field.h"
-#include "ChemData.h"
 #include <filesystem>
-
-cfd::Output::Output(int _myid, const cfd::Mesh& _mesh, std::vector<Field>& _field, const cfd::Parameter& _parameter, const cfd::Species& spec)://
-    myid{_myid},mesh{_mesh}, field(_field), parameter{_parameter}, species{spec} {
-  const std::filesystem::path out_dir("output/field");
-  if (!exists(out_dir))
-    create_directories(out_dir);
-}
+#include "ChemData.h"
+#include "gxl_lib/MyString.h"
 
 namespace cfd {
-void Output::print_field(integer step, int ngg) const {
+// Normally, the forward declaration should either be claimed as struct or class, but this time, the type must match
+// , or it will not be able to find the corresponding libs.
+class Mesh;
+
+
+template<MixtureModel mix_model, TurbMethod turb_method>
+class Output {
+public:
+  const int myid{0};
+  const Mesh &mesh;
+  std::vector<cfd::Field<mix_model, turb_method>> &field;
+  const Parameter &parameter;
+  const Species &species;
+
+  Output(integer _myid, const Mesh &_mesh, std::vector<Field<mix_model, turb_method>> &_field,
+         const Parameter &_parameter,
+         const Species &spec);
+
+  int32_t acquire_variable_names(std::vector<std::string> &var_name) const;
+
+  void print_field(integer step, int ngg = 0) const;
+
+  ~Output() = default;
+};
+
+template<MixtureModel mix_model, TurbMethod turb_method>
+int32_t Output<mix_model, turb_method>::acquire_variable_names(std::vector<std::string> &var_name) const {
+  int32_t n_var = 3 + 7; // x,y,z + rho,u,v,w,p,T,Mach
+  if constexpr (mix_model != MixtureModel::Air) {
+    n_var += parameter.get_int("n_spec"); // Y_k
+    var_name.resize(n_var);
+    auto &names = species.spec_list;
+    for (auto &[name, ind]: names) {
+      var_name[ind+10]=name;
+    }
+  }
+  if constexpr (turb_method == TurbMethod::RANS) {
+    if (integer rans_method = parameter.get_int("RANS_model"); rans_method == 1) {
+      n_var += 1; // SA variable?
+    } else if (rans_method == 2) {
+      n_var += 2; // k, omega
+      var_name.emplace_back("k");
+      var_name.emplace_back("omega");
+    }
+  }
+  if constexpr (mix_model == MixtureModel::FL) {
+    n_var += 2; // Z, Z_prime
+    var_name.emplace_back("z");
+    var_name.emplace_back("z prime");
+  }
+  if constexpr (turb_method == TurbMethod::RANS || turb_method == TurbMethod::LES) {
+    n_var += 1; // mu_t
+    var_name.emplace_back("mut");
+  }
+  return n_var;
+}
+
+template<MixtureModel mix_model, TurbMethod turb_method>
+void Output<mix_model, turb_method>::print_field(integer step, int ngg) const {
   // Copy data from GPU to CPU
-  for (auto& f:field) {
+  for (auto &f: field) {
     f.copy_data_from_device();
   }
 
   const std::filesystem::path out_dir("output/field");
-  FILE* fp = fopen((out_dir.string() + fmt::format("/flowfield{:>4}.plt", myid)).c_str(), "wb");
+  FILE *fp = fopen((out_dir.string() + std::format("/flowfield{:>4}.plt", myid)).c_str(), "wb");
 
   // I. Header section
 
@@ -41,18 +92,15 @@ void Output::print_field(integer step, int ngg) const {
   constexpr int32_t file_type{0};
   fwrite(&file_type, 4, 1, fp);
   // 2. Title
-  write_str("Solution file", fp);
+  gxl::write_str("Solution file", fp);
   // 3. Number of variables in the datafile, for this file, n_var = 3(x,y,z)+7(density,u,v,w,p,t,Ma)+n_spec+n_scalar
-  const int32_t n_var{3 + 7 + field[0].n_spec};
+  std::vector<std::string> var_name{"x", "y", "z", "density", "u", "v", "w", "pressure", "temperature", "mach"};
+  int32_t n_var = acquire_variable_names(var_name);
   fwrite(&n_var, 4, 1, fp);
   // 4. Variable names.
-  std::vector<std::string> var_name{"x", "y", "z", "density", "u", "v", "w", "pressure", "temperature", "mach"};
-  var_name.resize(n_var);
-  auto& names = species.spec_list;
-  for (auto& [name, ind] : names)
-    var_name[ind + 10] = name;
-  for (auto& name : var_name)
-    write_str(name.c_str(), fp);
+  for (auto &name: var_name) {
+    gxl::write_str(name.c_str(), fp);
+  }
 
   // iv. Zones
   for (int i = 0; i < mesh.n_block; ++i) {
@@ -60,7 +108,7 @@ void Output::print_field(integer step, int ngg) const {
     constexpr float zone_marker{299.0f};
     fwrite(&zone_marker, 4, 1, fp);
     // 2. Zone name.
-    write_str(fmt::format("zone {}", i).c_str(), fp);
+    gxl::write_str(std::format("zone {}", i).c_str(), fp);
     // 3. Parent zone. No longer used
     constexpr int32_t parent_zone{-1};
     fwrite(&parent_zone, 4, 1, fp);
@@ -87,7 +135,7 @@ void Output::print_field(integer step, int ngg) const {
     constexpr int32_t miscellaneous_face{0};
     fwrite(&miscellaneous_face, 4, 1, fp);
     // For ordered zone, specify IMax, JMax, KMax
-    auto& b = mesh[i];
+    auto &b = mesh[i];
     const auto mx{b.mx + 2 * ngg}, my{b.my + 2 * ngg}, mz{b.mz + 2 * ngg};
     fwrite(&mx, 4, 1, fp);
     fwrite(&my, 4, 1, fp);
@@ -99,16 +147,16 @@ void Output::print_field(integer step, int ngg) const {
 
     // First, record the current simulation step
     constexpr int32_t auxi_data{1};
-    fwrite(&auxi_data,4,1,fp);
+    fwrite(&auxi_data, 4, 1, fp);
     // Name string
     constexpr auto step_name{"step"};
-    write_str(step_name,fp);
+    gxl::write_str(step_name, fp);
     // Auxiliary Value Format(Currently only allow 0=AuxDataType_String)
     constexpr int32_t auxi_val_form{0};
-    fwrite(&auxi_val_form,4,1,fp);
+    fwrite(&auxi_val_form, 4, 1, fp);
     // Value string
-    const auto step_str=std::to_string(step);
-    write_str(step_str.c_str(),fp);
+    const auto step_str = std::to_string(step);
+    gxl::write_str(step_str.c_str(), fp);
 
     // No more data
     constexpr int32_t no_more_auxi_data{0};
@@ -127,8 +175,9 @@ void Output::print_field(integer step, int ngg) const {
     // 2. Variable data format, 1=Float, 2=Double, 3=LongInt, 4=ShortInt, 5=Byte, 6=Bit
     constexpr int32_t data_format{1};
     constexpr size_t data_size{4};
-    for (int l = 0; l < n_var; ++l)
+    for (int l = 0; l < n_var; ++l) {
       fwrite(&data_format, 4, 1, fp);
+    }
     // 3. Has passive variables: 0 = no, 1 = yes.
     constexpr int32_t passive_var{0};
     fwrite(&passive_var, 4, 1, fp);
@@ -140,11 +189,11 @@ void Output::print_field(integer step, int ngg) const {
     fwrite(&shared_connect, 4, 1, fp);
     // 6. Compressed list of min/max pairs for each non-shared and non-passive variable.
     // For each non-shared and non-passive variable (as specified above):
-    auto& b{mesh[blk]};
-    auto& v{field[blk].h_zone};
+    auto &b{mesh[blk]};
+    auto &v{field[blk]};
     const auto mx{b.mx}, my{b.my}, mz{b.mz};
-    const std::vector<gxl::Array3D<double>>& vars{b.x, b.y, b.z};
-    for (auto& var : vars) {
+    const std::vector<gxl::Array3D<double>> &vars{b.x, b.y, b.z};
+    for (auto &var: vars) {
       double min_val{var(-ngg, -ngg, -ngg)}, max_val{var(-ngg, -ngg, -ngg)};
       for (int k = -ngg; k < mz + ngg; ++k) {
         for (int j = -ngg; j < my + ngg; ++j) {
@@ -179,43 +228,55 @@ void Output::print_field(integer step, int ngg) const {
       fwrite(&min_val[l], 8, 1, fp);
       fwrite(&max_val[l], 8, 1, fp);
     }
-    min_val[0] = v.mach(-ngg, -ngg, -ngg);
-    max_val[0] = v.mach(-ngg, -ngg, -ngg);
+    min_val[0] = v.ov(-ngg, -ngg, -ngg, 0);
+    max_val[0] = v.ov(-ngg, -ngg, -ngg, 0);
     for (int k = -ngg; k < mz + ngg; ++k) {
       for (int j = -ngg; j < my + ngg; ++j) {
         for (int i = -ngg; i < mx + ngg; ++i) {
-          min_val[0] = std::min(min_val[0], v.mach(i, j, k));
-          max_val[0] = std::max(max_val[0], v.mach(i, j, k));
+          min_val[0] = std::min(min_val[0], v.ov(i, j, k, 0));
+          max_val[0] = std::max(max_val[0], v.ov(i, j, k, 0));
         }
       }
     }
     fwrite(min_val.data(), 8, 1, fp);
     fwrite(max_val.data(), 8, 1, fp);
-    const int n_spec{field[0].n_spec};
-#if MULTISPECIES==1
-    std::vector<double> y_min(n_spec,0),y_max(n_spec,0);
-    for (int l = 0; l < n_spec; ++l) {
-      y_min[l]=v.yk(-ngg, -ngg, -ngg,l);
-      y_max[l]=v.yk(-ngg, -ngg, -ngg,l);
-    }
-    for (int k = -ngg; k < mz + ngg; ++k) {
-      for (int j = -ngg; j < my + ngg; ++j) {
-        for (int i = -ngg; i < mx + ngg; ++i) {
-          for (int l = 0; l < n_spec; ++l) {
-            y_min[l] = std::min(y_min[l], v.yk(i, j, k, l));
-            y_max[l] = std::max(y_max[l], v.yk(i, j, k, l));
+    // scalar variables. Y0-Y_{Ns-1}, k, omega, z, z_prime
+    const integer n_scalar{field[0].h_ptr->n_scal};
+    std::vector<double> s_min(n_scalar, 0), s_max(n_scalar, 0);
+    for (int l = 0; l < n_scalar; ++l) {
+      s_min[l] = v.sv(-ngg, -ngg, -ngg, l);
+      s_max[l] = v.sv(-ngg, -ngg, -ngg, l);
+      for (int k = -ngg; k < mz + ngg; ++k) {
+        for (int j = -ngg; j < my + ngg; ++j) {
+          for (int i = -ngg; i < mx + ngg; ++i) {
+            s_min[l] = std::min(s_min[l], v.sv(i, j, k, l));
+            s_max[l] = std::max(s_max[l], v.sv(i, j, k, l));
           }
         }
       }
     }
-    for (int l = 0; l < n_spec; ++l) {
-      fwrite(&y_min[l], 8, 1, fp);
-      fwrite(&y_max[l], 8, 1, fp);
+    for (int l = 0; l < n_scalar; ++l) {
+      fwrite(&s_min[l], 8, 1, fp);
+      fwrite(&s_max[l], 8, 1, fp);
     }
-#endif
+    // if turbulent, mut
+    if constexpr (turb_method == TurbMethod::RANS || turb_method == TurbMethod::LES) {
+      min_val[0] = v.ov(-ngg, -ngg, -ngg, 1);
+      max_val[0] = v.ov(-ngg, -ngg, -ngg, 1);
+      for (int k = -ngg; k < mz + ngg; ++k) {
+        for (int j = -ngg; j < my + ngg; ++j) {
+          for (int i = -ngg; i < mx + ngg; ++i) {
+            min_val[0] = std::min(min_val[0], v.ov(i, j, k, 1));
+            max_val[0] = std::max(max_val[0], v.ov(i, j, k, 1));
+          }
+        }
+      }
+      fwrite(min_val.data(), 8, 1, fp);
+      fwrite(max_val.data(), 8, 1, fp);
+    }
 
     // 7. Zone Data.
-    for (auto& var : vars) {
+    for (auto &var: vars) {
       for (int k = -ngg; k < mz + ngg; ++k) {
         for (int j = -ngg; j < my + ngg; ++j) {
           for (int i = -ngg; i < mx + ngg; ++i) {
@@ -238,36 +299,55 @@ void Output::print_field(integer step, int ngg) const {
     for (int k = -ngg; k < mz + ngg; ++k) {
       for (int j = -ngg; j < my + ngg; ++j) {
         for (int i = -ngg; i < mx + ngg; ++i) {
-          const auto value = static_cast<float>(v.mach(i, j, k));
+          const auto value = static_cast<float>(v.ov(i, j, k, 0));
           fwrite(&value, data_size, 1, fp);
         }
       }
     }
-#if MULTISPECIES==1
-    for (int l = 0; l < n_spec; ++l) {
+    for (int l = 0; l < n_scalar; ++l) {
       for (int k = -ngg; k < mz + ngg; ++k) {
         for (int j = -ngg; j < my + ngg; ++j) {
           for (int i = -ngg; i < mx + ngg; ++i) {
-            const auto value = static_cast<float>(v.yk(i, j, k, l));
+            const auto value = static_cast<float>(v.sv(i, j, k, l));
             fwrite(&value, data_size, 1, fp);
           }
         }
       }
     }
-#endif
+    // if turbulent, mut
+    if constexpr (turb_method == TurbMethod::RANS || turb_method == TurbMethod::LES) {
+      for (int k = -ngg; k < mz + ngg; ++k) {
+        for (int j = -ngg; j < my + ngg; ++j) {
+          for (int i = -ngg; i < mx + ngg; ++i) {
+            const auto value = static_cast<float>(v.ov(i, j, k, 1));
+            fwrite(&value, data_size, 1, fp);
+          }
+        }
+      }
+    }
+    fclose(fp);
   }
-  fclose(fp);
 }
 
-void write_str(const char* str, FILE* file) {
-  int value = 0;
-  while (*str != '\0') {
-    value = static_cast<int>(*str);
-    fwrite(&value, sizeof(int), 1, file);
-    ++str;
+//void write_str(const char *str, FILE *file);
+
+// Implementations
+template<MixtureModel mix_model, TurbMethod turb_method>
+Output<mix_model, turb_method>::Output(integer
+                                       _myid,
+                                       const cfd::Mesh &_mesh,
+                                       std::vector<Field<mix_model, turb_method>>
+                                       &_field,
+                                       const cfd::Parameter &_parameter,
+                                       const cfd::Species &spec): myid{_myid},
+                                                                  mesh{_mesh},
+                                                                  field(_field),
+                                                                  parameter{
+                                                                      _parameter},
+                                                                  species{spec} {
+  const std::filesystem::path out_dir("output/field");
+  if (!exists(out_dir)) {
+    create_directories(out_dir);
   }
-  constexpr char null_char = '\0';
-  value                    = static_cast<int>(null_char);
-  fwrite(&value, sizeof(int), 1, file);
 }
 } // cfd

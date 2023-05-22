@@ -12,7 +12,6 @@ struct Species {
   explicit Species(Parameter &parameter);
   integer n_spec{0};  // number of species
   std::map<std::string, integer> spec_list; // species list
-#if MULTISPECIES == 1
 
   void compute_cp(real temp, real *cp) const &;
 
@@ -42,7 +41,6 @@ private:
   void read_therm(Parameter &parameter);
 
   void read_tran(Parameter &parameter);
-#endif
 };
 
 struct Reaction {

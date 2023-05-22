@@ -18,11 +18,6 @@ cfd::Parameter::Parameter(const std::string &filename) {
   file.close();
 }
 
-//real cfd::Parameter::find_real(const std::string &name) const {
-//  if (real_parameters.contains(name)) return real_parameters.at(name);
-//  return 0;
-//}
-
 void cfd::Parameter::read_param_from_file() {
   for (auto &name: file_names) {
     std::ifstream file(name);
@@ -39,6 +34,23 @@ void cfd::Parameter::read_param_from_file() {
   }
 
   update_parameter("n_var", 5);
+  update_parameter("n_turb",0);
+  integer n_scalar{0};
+  if (bool_parameters["turbulence"]==1){
+    if (int_parameters["turbulence_method"]==1){ //RANS
+      if (int_parameters["RANS_model"]==1) {// SA
+        update_parameter("n_turb",1);
+        update_parameter("n_var", 5 + 1);
+        n_scalar+=1;
+      }
+      else { // SST
+        update_parameter("n_turb", 2);
+        update_parameter("n_var", 5 + 2);
+        n_scalar+=2;
+      }
+    }
+  }
+  update_parameter("n_scalar",n_scalar);
 }
 
 void cfd::Parameter::read_one_file(std::ifstream &file) {

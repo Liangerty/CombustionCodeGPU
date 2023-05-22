@@ -80,3 +80,15 @@ std::string gxl::to_upper(const std::string &str) {
     ch=std::toupper(ch);
   return str_upper;
 }
+
+void gxl::write_str(const char *str, FILE *file) {
+  int value = 0;
+  while (*str != '\0') {
+    value = static_cast<int>(*str);
+    fwrite(&value, sizeof(int), 1, file);
+    ++str;
+  }
+  constexpr char null_char = '\0';
+  value                    = static_cast<int>(null_char);
+  fwrite(&value, sizeof(int), 1, file);
+}

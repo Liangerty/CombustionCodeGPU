@@ -1,59 +1,55 @@
-#include "Driver.h"
-#include "DParameter.h"
-#include "Initialize.h"
-#include "InviscidScheme.cuh"
+#include "Driver.cuh"
 #include "ViscousScheme.cuh"
-#include "fmt/core.h"
+#include "FieldOperation.cuh"
 #include "TimeAdvanceFunc.cuh"
-#include "TemporalScheme.cuh"
-#include <fstream>
+#include "DataCommunication.cuh"
+#include "Initialize.cuh"
+#include "SchemeSelector.cuh"
 #include <filesystem>
 #include "Parallel.h"
-#include "Output.h"
+#include <iostream>
 
-#if MULTISPECIES == 1
-#else
-#include "Constants.h"
-#endif
+namespace cfd {
+// Instantiate all possible drivers
+template
+struct Driver<MixtureModel::Air, TurbMethod::Laminar>;
+template
+struct Driver<MixtureModel::Air, TurbMethod::RANS>;
+template
+struct Driver<MixtureModel::Mixture, TurbMethod::Laminar>;
+template
+struct Driver<MixtureModel::Mixture, TurbMethod::RANS>;
+template
+struct Driver<MixtureModel::FR, TurbMethod::Laminar>;
+template
+struct Driver<MixtureModel::FR, TurbMethod::RANS>;
 
-cfd::Driver::Driver(Parameter &parameter, Mesh &mesh_, ChemData &chem_data) : myid(parameter.get_int("myid")), time(),
-                                                                              mesh(mesh_), parameter(parameter),
-                                                                              bound_cond(),
-                                                                              output{myid, mesh, field, parameter,
-                                                                                     chem_data.spec} {
+
+template<MixtureModel mix_model, TurbMethod turb_method>
+Driver<mix_model, turb_method>::Driver(Parameter &parameter, Mesh &mesh_):myid(parameter.get_int("myid")), time(),
+                                                                          mesh(mesh_), parameter(parameter),
+                                                                          spec(parameter), reac(parameter),
+                                                                          output(myid, mesh_, field, parameter, spec) {
   // Allocate the memory for every block
   for (integer blk = 0; blk < mesh.n_block; ++blk) {
     field.emplace_back(parameter, mesh[blk]);
   }
 
-  initialize_basic_variables(parameter, mesh, field, chem_data);
-  if(parameter.get_int("initial")==1){
-    // If continue from previous results, then we need the residual scales
-    // If the file does not exist, then we have a trouble
-    std::ifstream res_scale_in("output/message/residual_scale.txt");
-    res_scale_in>>res_scale[0]>>res_scale[1]>>res_scale[2]>>res_scale[3];
-    res_scale_in.close();
-  }
+  initialize_basic_variables(parameter, mesh, field, spec);
 
-
-  // The following code is used for GPU memory allocation
 #ifdef GPU
-  DParameter d_param(parameter, chem_data);
+  DParameter d_param(parameter, spec, reac);
   cudaMalloc(&param, sizeof(DParameter));
   cudaMemcpy(param, &d_param, sizeof(DParameter), cudaMemcpyHostToDevice);
   for (integer blk = 0; blk < mesh.n_block; ++blk) {
     field[blk].setup_device_memory(parameter);
   }
-  bound_cond.initialize_bc_on_GPU(mesh_, field, chem_data.spec, parameter);
-  cudaMalloc(&inviscid_scheme, sizeof(InviscidScheme *));
-  cudaMalloc(&viscous_scheme, sizeof(ViscousScheme *));
-  cudaMalloc(&temporal_scheme, sizeof(TemporalScheme *));
-
-  setup_schemes<<<1, 1>>>(inviscid_scheme, viscous_scheme, temporal_scheme, param);
+  bound_cond.initialize_bc_on_GPU(mesh_, field, spec, parameter);
 #endif
 }
 
-void cfd::Driver::initialize_computation() {
+template<MixtureModel mix_model, TurbMethod turb_method>
+void Driver<mix_model, turb_method>::initialize_computation() {
   dim3 tpb{8, 8, 4};
   if (mesh.dimension == 2) {
     tpb = {16, 16, 1};
@@ -64,55 +60,59 @@ void cfd::Driver::initialize_computation() {
   for (auto i = 0; i < mesh.n_block; ++i) {
     integer mx{mesh[i].mx}, my{mesh[i].my}, mz{mesh[i].mz};
     dim3 bpg{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
-    compute_cv_from_bv<<<bpg, tpb>>>(field[i].d_ptr, param);
+    compute_cv_from_bv<mix_model, turb_method><<<bpg, tpb>>>(field[i].d_ptr, param);
   }
 
   // Second, apply boundary conditions to all boundaries, including face communication between faces
-  for (integer b=0;b<mesh.n_block;++b)
+  for (integer b = 0; b < mesh.n_block; ++b) {
     bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
 //  cudaDeviceSynchronize();
-  if (myid == 0) {
-    fmt::print("Boundary conditions are applied successfully for initialization\n");
+    if (myid == 0) {
+      printf("Boundary conditions are applied successfully for initialization\n");
+    }
   }
 
   // Third, communicate values between processes
-  data_communication();
+  data_communication<mix_model, turb_method>(mesh, field);
   // Currently not implemented, thus the current program can only be used on a single GPU
 
   if (myid == 0) {
-    fmt::print("Finish data transfer.\n");
+    printf("Finish data transfer.\n");
   }
 
   for (auto b = 0; b < mesh.n_block; ++b) {
     integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
     dim3 bpg{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
-    update_physical_properties<<<bpg, tpb>>>(field[b].d_ptr, param);
+    update_physical_properties<mix_model, turb_method><<<bpg, tpb>>>(field[b].d_ptr, param);
   }
   cudaDeviceSynchronize();
   if (myid == 0) {
-    fmt::print("The flowfield is completely initialized on GPU.\n");
+    printf("The flowfield is completely initialized on GPU.\n");
   }
 }
 
-void cfd::Driver::simulate() {
+template<MixtureModel mix_model, TurbMethod turb_method>
+void Driver<mix_model, turb_method>::simulate() {
   const auto steady{parameter.get_bool("steady")};
   if (steady) {
     steady_simulation();
   } else {
     const auto temporal_tag{parameter.get_int("temporal_scheme")};
     switch (temporal_tag) {
-      case 11: // For example, if DULUSGS, then add a function to initiate the computation instead of intialize before setting up the scheme as CPU code
-      case 12:
-      default:fmt::print("Not implemented");
+      case 11: // For example, if DULUSGS, then add a function to initiate the computation instead of initialize before setting up the scheme as CPU code
+        break;
+      case 12:break;
+      default:printf("Not implemented");
     }
   }
 }
 
-void cfd::Driver::steady_simulation() {
-  fmt::print("Steady flow simulation.\n");
+template<MixtureModel mix_model, TurbMethod turb_method>
+void Driver<mix_model, turb_method>::steady_simulation() {
+  printf("Steady flow simulation.\n");
   bool converged{false};
   integer step{parameter.get_int("step")};
-  integer total_step{parameter.get_int("total_step")+step};
+  integer total_step{parameter.get_int("total_step") + step};
   const integer n_block{mesh.n_block};
   const integer n_var{parameter.get_int("n_var")};
   const integer ngg{mesh[0].ngg};
@@ -130,7 +130,6 @@ void cfd::Driver::steady_simulation() {
     bpg[b] = {(mx - 1) / tpb.x + 1, (my - 1) / tpb.y + 1, (mz - 1) / tpb.z + 1};
   }
 
-  //  const integer file_step{parameter.get_int("output_file")};
   while (!converged) {
     ++step;
     /*[[unlikely]]*/if (step > total_step) {
@@ -149,21 +148,21 @@ void cfd::Driver::steady_simulation() {
       set_dq_to_0 <<<bpg[b], tpb >>>(field[b].d_ptr);
 
       // Second, for each block, compute the residual dq
-      compute_inviscid_flux(mesh[b], field[b].d_ptr, inviscid_scheme, param, n_var);
-      compute_viscous_flux(mesh[b], field[b].d_ptr, viscous_scheme, param, n_var);
+      compute_inviscid_flux<mix_model, turb_method>(mesh[b], field[b].d_ptr, param, n_var);
+      compute_viscous_flux<mix_model, turb_method>(mesh[b], field[b].d_ptr, param, n_var);
 
       // compute local time step
-      local_time_step<<<bpg[b], tpb>>>(field[b].d_ptr, param, temporal_scheme);
+      local_time_step<mix_model><<<bpg[b], tpb>>>(field[b].d_ptr, param);
       // implicit treatment if needed
 
       // update conservative and basic variables
-      update_cv_and_bv<<<bpg[b], tpb>>>(field[b].d_ptr, param);
+      update_cv_and_bv<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
 
       // apply boundary conditions
       bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
     }
     // Third, transfer data between and within processes
-    data_communication();
+    data_communication(mesh, field);
 
     if (mesh.dimension == 2) {
       for (auto b = 0; b < n_block; ++b) {
@@ -177,13 +176,13 @@ void cfd::Driver::steady_simulation() {
     for (auto b = 0; b < n_block; ++b) {
       integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
       dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
-      update_physical_properties<<<BPG, tpb>>>(field[b].d_ptr, param);
+      update_physical_properties<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
     }
 
     // Finally, test if the simulation reaches convergence state
     if (step % output_screen == 0) {
       real err_max = compute_residual(step);
-      converged = err_max < parameter.get_real("convergence_criteria") ? true : false;
+      converged = err_max < parameter.get_real("convergence_criteria");
       if (myid == 0) {
         steady_screen_output(step, err_max);
       }
@@ -196,31 +195,8 @@ void cfd::Driver::steady_simulation() {
   delete[] bpg;
 }
 
-void cfd::Driver::data_communication() {
-  // -1 - inner faces
-  for (auto blk = 0; blk < mesh.n_block; ++blk) {
-    auto &inF = mesh[blk].inner_face;
-    const auto n_innFace = inF.size();
-    auto v = field[blk].d_ptr;
-    const auto ngg = mesh[blk].ngg;
-    for (auto l = 0; l < n_innFace; ++l) {
-      // reference to the current face
-      const auto &fc = mesh[blk].inner_face[l];
-      uint tpb[3], bpg[3];
-      for (size_t j = 0; j < 3; ++j) {
-        tpb[j] = fc.n_point[j] <= (2 * ngg + 1) ? 1 : 16;
-        bpg[j] = (fc.n_point[j] - 1) / tpb[j] + 1;
-      }
-      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-
-      // variables of the neighbor block
-      auto nv = field[fc.target_block].d_ptr;
-      inner_communication<<<BPG, TPB>>>(v, nv, l);
-    }
-  }
-}
-
-real cfd::Driver::compute_residual(integer step) {
+template<MixtureModel mix_model, TurbMethod turb_method>
+real Driver<mix_model, turb_method>::compute_residual(integer step) {
   const integer n_block{mesh.n_block};
   for (auto &e: res) {
     e = 0;
@@ -273,10 +249,11 @@ real cfd::Driver::compute_residual(integer step) {
       }
     }
     const std::filesystem::path out_dir("output/message");
-    if (!exists(out_dir))
+    if (!exists(out_dir)) {
       create_directories(out_dir);
-    std::ofstream res_scale_out(out_dir.string()+"/residual_scale.txt");
-    res_scale_out<<fmt::format("{}\n{}\n{}\n{}\n",res_scale[0],res_scale[1],res_scale[2],res_scale[3]);
+    }
+    std::ofstream res_scale_out(out_dir.string() + "/residual_scale.txt");
+    res_scale_out << std::format("{}\n{}\n{}\n{}\n", res_scale[0], res_scale[1], res_scale[2], res_scale[3]);
     res_scale_out.close();
   }
 
@@ -294,7 +271,7 @@ real cfd::Driver::compute_residual(integer step) {
 
   if (myid == 0) {
     if (isnan(err_max)) {
-      printf("Nan occured in step %d. Stop simulation.\n", step);
+      printf("Nan occurred in step %d. Stop simulation.\n", step);
       cfd::MpiParallel::exit();
     }
   }
@@ -302,55 +279,23 @@ real cfd::Driver::compute_residual(integer step) {
   return err_max;
 }
 
-void cfd::Driver::steady_screen_output(integer step, real err_max) {
+template<MixtureModel mix_model, TurbMethod turb_method>
+void Driver<mix_model, turb_method>::steady_screen_output(integer step, real err_max) {
   time.get_elapsed_time();
   std::ofstream history("history.dat", std::ios::app);
-  history << fmt::format("{}\t{}\n", step, err_max);
+  history << std::format("{}\t{}\n", step, err_max);
   history.close();
 
-  fmt::print("\n{:>38}    converged to: {:>11.4e}\n", "rho", res[0]);
-  fmt::print("  n={:>8},                       V     converged to: {:>11.4e}   \n", step, res[1]);
-  fmt::print("  n={:>8},                       p     converged to: {:>11.4e}   \n", step, res[2]);
-  fmt::print("{:>38}    converged to: {:>11.4e}\n", "T ", res[3]);
-  fmt::print("CPU time for this step is {:>16.8f}s\n", time.step_time);
-  fmt::print("Total elapsed CPU time is {:>16.8f}s\n", time.elapsed_time);
-}
-
-__global__ void cfd::setup_schemes(cfd::InviscidScheme **inviscid_scheme, cfd::ViscousScheme **viscous_scheme,
-                                   cfd::TemporalScheme **temporal_scheme, cfd::DParameter *param) {
-  const integer inviscid_tag{param->inviscid_scheme};
-  switch (inviscid_tag) {
-    case 3:*inviscid_scheme = new AUSMP(param);
-      printf("Inviscid scheme: AUSM+\n");
-      break;
-    default:*inviscid_scheme = new AUSMP(param);
-      printf("No such scheme. Set to AUSM+ scheme\n");
-  }
-
-  const integer viscous_tag{param->viscous_scheme};
-  switch (viscous_tag) {
-    case 2:*viscous_scheme = new SecOrdViscScheme;
-      printf("Viscous scheme: 2nd order central difference\n");
-      break;
-    default:*viscous_scheme = new ViscousScheme;
-      printf("Inviscid computaion\n");
-  }
-
-  const integer temporal_tag{param->temporal_scheme};
-  switch (temporal_tag) {
-    case 0:*temporal_scheme = new SteadyTemporalScheme;
-      printf("Temporal scheme: 1st order explicit Euler\n");
-      break;
-    case 1:*temporal_scheme = new LUSGS;
-      printf("Temporal scheme: Implicit LUSGS\n");
-      break;
-    default:*temporal_scheme = new SteadyTemporalScheme;
-      printf("Temporal scheme: 1st order explicit Euler\n");
-  }
+  std::cout << std::format("\n{:>38}    converged to: {:>11.4e}\n", "rho", res[0]);
+  std::cout << std::format("  n={:>8},                       V     converged to: {:>11.4e}   \n", step, res[1]);
+  std::cout << std::format("  n={:>8},                       p     converged to: {:>11.4e}   \n", step, res[2]);
+  std::cout << std::format("{:>38}    converged to: {:>11.4e}\n", "T ", res[3]);
+  std::cout << std::format("CPU time for this step is {:>16.8f}s\n", time.step_time);
+  std::cout << std::format("Total elapsed CPU time is {:>16.8f}s\n", time.elapsed_time);
 }
 
 template<integer N>
-__global__ void cfd::reduction_of_dv_squared(real *arr, integer size) {
+__global__ void reduction_of_dv_squared(real *arr, integer size) {
   integer i = blockDim.x * blockIdx.x + threadIdx.x;
   const integer t = threadIdx.x;
   extern __shared__ real s[];
@@ -392,3 +337,5 @@ __global__ void cfd::reduction_of_dv_squared(real *arr, integer size) {
     arr[blockIdx.x + gridDim.x * 3] = s[3];
   }
 }
+
+} // cfd

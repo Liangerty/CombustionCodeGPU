@@ -1053,32 +1053,3 @@ void cfd::Mesh::init_parallel_ghost_grid(const integer myid, const integer ngg) 
   delete[]temp_s;
   delete[]temp_r;
 }
-
-//void cfd::Mesh::copy_mesh_to_device() {
-//  for (auto &b: block) {
-//    integer mx{b.mx}, my{b.my}, mz{b.mz}, ngg{b.ngg};
-//    auto n_bound{b.boundary.size()};
-//    auto n_inner{b.inner_face.size()};
-//    auto n_par{b.parallel_face.size()};
-//    auto mem_sz = sizeof(Boundary) * n_bound;
-//    cudaMalloc(&b.d_bound, mem_sz);
-//    cudaMemcpy(b.d_bound, b.boundary.data(), mem_sz, cudaMemcpyHostToDevice);
-//    mem_sz = sizeof(InnerFace) * n_inner;
-//    cudaMalloc(&b.d_innerface, mem_sz);
-//    cudaMemcpy(b.d_innerface, b.inner_face.data(), mem_sz, cudaMemcpyHostToDevice);
-//    mem_sz = sizeof(ParallelFace) * n_par;
-//    cudaMalloc(&b.d_parface, mem_sz);
-//    cudaMemcpy(b.d_parface, b.parallel_face.data(), mem_sz, cudaMemcpyHostToDevice);
-//    b.d_x.allocate_memory(mx, my, mz, ngg);
-//    b.d_y.allocate_memory(mx, my, mz, ngg);
-//    b.d_z.allocate_memory(mx, my, mz, ngg);
-//    b.d_jac.allocate_memory(mx, my, mz, ngg);
-//    b.d_metric.allocate_memory(mx, my, mz, ngg);
-//    cudaMemcpy(b.d_x.data(), b.x.data(), sizeof(real) * b.x.size(), cudaMemcpyHostToDevice);
-//    cudaMemcpy(b.d_y.data(), b.y.data(), sizeof(real) * b.y.size(), cudaMemcpyHostToDevice);
-//    cudaMemcpy(b.d_z.data(), b.z.data(), sizeof(real) * b.z.size(), cudaMemcpyHostToDevice);
-//    cudaMemcpy(b.d_jac.data(), b.jacobian.data(), sizeof(real) * b.jacobian.size(), cudaMemcpyHostToDevice);
-//    cudaMemcpy(b.d_metric.data(), b.metric.data(), sizeof(gxl::Matrix<real, 3, 3, 1>) * b.metric.size(),
-//               cudaMemcpyHostToDevice);
-//  }
-//}

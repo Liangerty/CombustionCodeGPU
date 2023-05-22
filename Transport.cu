@@ -8,8 +8,6 @@ real cfd::Sutherland(real temperature) {
   return 1.716e-5 * pow(temperature / 273, 1.5) * (273 + 111) / (temperature + 111);
 }
 
-#if MULTISPECIES == 1
-
 real cfd::compute_viscosity(real temperature, real mw_total, real const *Y, Species &spec) {
   // This method can only be used on CPU, while for GPU the allocation may be performed in every step
   for (int i = 0; i < spec.n_spec; ++i) {
@@ -43,7 +41,7 @@ __device__ void cfd::compute_transport_property(integer i, integer j, integer k,
                                      cfd::DParameter *param, DZone* zone) {
   const auto n_spec{param->n_spec};
   const real* mw=param->mw;
-  const auto yk=zone->yk;
+  const auto yk=zone->sv;
 
   real X[MAX_SPEC_NUMBER], vis[MAX_SPEC_NUMBER];
   for (int l = 0; l < n_spec; ++l) {
@@ -82,5 +80,3 @@ __device__ void cfd::compute_transport_property(integer i, integer j, integer k,
       zone->rho_D(i,j,k,l)=(1-yk(i,j,k,l))*viscosity/((1-X[l])*sc);
   }
 }
-#endif
-

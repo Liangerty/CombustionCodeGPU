@@ -47,17 +47,11 @@ public:
 
   std::string &get_string(const std::string &name) { return string_parameters.at(name); }
 
-//  [[nodiscard]] const std::string &get_string(const std::string &name) const { return string_parameters.at(name); }
-
   [[nodiscard]] const auto& get_struct(const std::string &name)const{return struct_array.at(name);}
 
   [[nodiscard]] const auto& get_string_array(const std::string &name)const{return string_array.at(name);}
 
   void update_parameter(const std::string &name, const int new_value) { int_parameters[name] = new_value; }
-
-//  void update_parameter(const std::string &name, const real new_value) { real_parameters[name] = new_value; }
-//
-//  [[nodiscard]] real find_real(const std::string &name) const;
 
   ~Parameter() = default;
 

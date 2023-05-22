@@ -1,39 +1,38 @@
 # There are several options need to be set here
 # 1. "CMAKE_CUDA_ARCHITECTURES", the CUDA architecture should be specified
 #     For example, for Nvidia Quadro GP100, the value should be 60, while for GV100, 70
-# 2. "MULTISPECIES" Whether the simulation is for mixture(1) or air(0),
-# 3. "MAX_SPEC_NUMBER" if mixture, the number of species should not beyond 55, which is set by allowing the computation of CH4 in Grimech mechanism.
+# 2. "MAX_SPEC_NUMBER" if mixture, the number of species should not beyond 55, which is set by allowing the computation of CH4 in Grimech mechanism.
 #     If larger mechanism is to be used, the variable should be modified to be larger or equal to the species number.
 #     However, the correctness, if the resource is available for the corresponding kernel may need to be tested.
 
-cmake_minimum_required(VERSION 3.23)
+cmake_minimum_required(VERSION 3.18)
 
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
   set(CMAKE_CUDA_ARCHITECTURES 60)
 endif()
 
-add_compile_definitions(MULTISPECIES=1)
+#add_compile_definitions(MULTISPECIES=1)
 add_compile_definitions(MAX_SPEC_NUMBER=55)
 add_compile_definitions(GPU)
 
 project(2_CLionGPU CUDA CXX)
 
-set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 20)
 
 list(APPEND src_file
-  BoundCond.h BoundCond.cpp BoundCond.cuh BoundCond.cu
-  ChemData.h ChemData.cpp
-  DParameter.cu DParameter.h Driver.h Driver.cu
+  BoundCond.h BoundCond.cpp BoundCond.cu BoundCond.cuh
+  ChemData.h ChemData.cpp Constants.h
+  DataCommunication.cuh DataCommunication.cu Define.h DParameter.cu DParameter.h Driver.cu Driver.cuh
   Element.h Element.cpp
-  Field.h Field.cu
-  Initialize.h Initialize.cu InviscidScheme.cu InviscidScheme.cuh
+  Field.h Field.cu FieldOperation.cuh FieldOperation.cu
+  Initialize.cuh Initialize.cu InviscidScheme.cuh
   Limiter.cuh
   main.cu Mesh.h Mesh.cpp
-  Output.cu Output.h
+  Output.hpp
   Parallel.h Parallel.cpp Parameter.h Parameter.cpp
-  Reconstruction.cu Reconstruction.cuh
-  TemporalScheme.cu TemporalScheme.cuh Thermo.cuh Thermo.cu TimeAdvanceFunc.cu TimeAdvanceFunc.cuh Transport.cuh Transport.cu
-  ViscousScheme.cu ViscousScheme.cuh
+  Reconstruction.cu Reconstruction.cuh SchemeSelector.cuh
+  Transport.cuh Transport.cu TimeAdvanceFunc.cu TimeAdvanceFunc.cuh Thermo.cuh Thermo.cu
+  ViscousScheme.cuh
 
   gxl_lib/Array.hpp
   gxl_lib/MyString.cpp
@@ -69,7 +68,7 @@ target_link_directories(2_CLionGPU
   "$<$<CONFIG:Release>:${CMAKE_SOURCE_DIR}/depends/lib/release>"
   )
 
-#target_compile_options(2_CLionGPU
+#target_compile_options(5_TemplateDriver
 #  PUBLIC#private
 #  ${flags}
 #  "$<$<COMPILE_LANGUAGE:CXX>:${flags_release}>"

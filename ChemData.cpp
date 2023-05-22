@@ -1,70 +1,67 @@
 #include "ChemData.h"
 
-#if MULTISPECIES == 1
 #include "fmt/core.h"
 #include "gxl_lib/MyString.h"
 #include "Element.h"
 #include "Constants.h"
 #include <cmath>
-#endif
 
 cfd::Species::Species(Parameter &parameter) {
   parameter.update_parameter("n_spec", 0);
-#if MULTISPECIES == 1
-  std::ifstream comb_mech("./input_files/" + parameter.get_string("mechanism_file"));
-  std::string input{}, key{};
-  gxl::getline(comb_mech, input);  // Elements
-  gxl::getline(comb_mech, input);  //--------
-  gxl::getline(comb_mech, input);  //$N_e$ elements
-  std::istringstream line(input);
-  int n_elem{0};
-  line >> n_elem;
-  gxl::getline(comb_mech, input);  //------
-  int counter{0};
-  while (gxl::getline(comb_mech, input, gxl::Case::upper)) {
-    gxl::to_stringstream(input, line);
-    line >> key;
-    if (key == "SPECIES") break;
-    elem_list.emplace(key, counter++);
-    while (line >> key) elem_list.emplace(key, counter++);
-  }
-
-  gxl::getline(comb_mech, input);             //------------------
-  gxl::getline_to_stream(comb_mech, input, line);  //$N_s$ Species
-  int num_spec{0};
-  line >> num_spec;
-  set_nspec(num_spec, n_elem);
-  gxl::getline(comb_mech, input);  //------------------
-  parameter.update_parameter("n_spec", num_spec);
-  parameter.update_parameter("n_var", parameter.get_int("n_var") + num_spec);
-
-  counter = 0;
-  while (gxl::getline_to_stream(comb_mech, input, line, gxl::Case::upper)) {
-    line >> key;
-    if (key == "REACTION") break;
-    if (counter >= num_spec) continue;
-    register_spec(key, counter);
-    while (line >> key && counter < num_spec) register_spec(key, counter);
-  }
-  comb_mech.close();
-
-  read_therm(parameter);
-  read_tran(parameter);
-
-  fmt::print("Mixture composed of {} species will be simulated.\n", n_spec);
-  integer counter_spec{0};
-  for (auto &[name, label]: spec_list) {
-    fmt::print("{}\t", name);
-    ++counter_spec;
-    if (counter_spec % 10 == 0) {
-      fmt::print("\n");
+  if (parameter.get_bool("species")){
+    std::ifstream comb_mech("./input_files/" + parameter.get_string("mechanism_file"));
+    std::string input{}, key{};
+    gxl::getline(comb_mech, input);  // Elements
+    gxl::getline(comb_mech, input);  //--------
+    gxl::getline(comb_mech, input);  //$N_e$ elements
+    std::istringstream line(input);
+    int n_elem{0};
+    line >> n_elem;
+    gxl::getline(comb_mech, input);  //------
+    int counter{0};
+    while (gxl::getline(comb_mech, input, gxl::Case::upper)) {
+      gxl::to_stringstream(input, line);
+      line >> key;
+      if (key == "SPECIES") break;
+      elem_list.emplace(key, counter++);
+      while (line >> key) elem_list.emplace(key, counter++);
     }
-  }
-  fmt::print("\n");
-#endif
-}
 
-#if MULTISPECIES == 1
+    gxl::getline(comb_mech, input);             //------------------
+    gxl::getline_to_stream(comb_mech, input, line);  //$N_s$ Species
+    int num_spec{0};
+    line >> num_spec;
+    set_nspec(num_spec, n_elem);
+    gxl::getline(comb_mech, input);  //------------------
+    parameter.update_parameter("n_spec", num_spec);
+    parameter.update_parameter("n_var", parameter.get_int("n_var") + num_spec);
+    parameter.update_parameter("n_scalar",parameter.get_int("n_scalar")+num_spec);
+
+    counter = 0;
+    while (gxl::getline_to_stream(comb_mech, input, line, gxl::Case::upper)) {
+      line >> key;
+      if (key == "REACTION") break;
+      if (counter >= num_spec) continue;
+      register_spec(key, counter);
+      while (line >> key && counter < num_spec) register_spec(key, counter);
+    }
+    comb_mech.close();
+
+    read_therm(parameter);
+    read_tran(parameter);
+
+    fmt::print("Mixture composed of {} species will be simulated.\n", n_spec);
+    integer counter_spec{0};
+    for (auto &[name, label]: spec_list) {
+      fmt::print("{}\t", name);
+      ++counter_spec;
+      if (counter_spec % 10 == 0) {
+        fmt::print("\n");
+      }
+    }
+    fmt::print("\n");
+  }
+}
 
 void cfd::Species::compute_cp(real temp, real *cp) const &{
   const real t2{temp * temp}, t3{t2 * temp}, t4{t3 * temp};
@@ -265,8 +262,6 @@ void cfd::Species::read_tran(Parameter &parameter) {
     }
   }
 }
-
-#endif
 
 cfd::Reaction::Reaction(Parameter &parameter) {}
 

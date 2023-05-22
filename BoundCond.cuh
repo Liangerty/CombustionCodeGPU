@@ -18,23 +18,25 @@ class Mesh;
 
 struct DZone;
 struct DParameter;
+template<MixtureModel mix_model, TurbMethod turb_method>
 struct Field;
 
+template<MixtureModel mix_model, TurbMethod turb_method>
 struct DBoundCond {
   DBoundCond()=default;
 
-  void initialize_bc_on_GPU(Mesh &mesh, std::vector<Field> &field, Species &species, Parameter &parameter);
+  void initialize_bc_on_GPU(Mesh &mesh, std::vector<Field<mix_model, turb_method>> &field, Species &species, Parameter &parameter);
 
-  void link_bc_to_boundaries(Mesh &mesh, std::vector<Field>& field) const;
+  void link_bc_to_boundaries(Mesh &mesh, std::vector<Field<mix_model, turb_method>>& field) const;
 
-  void apply_boundary_conditions(const Block &block, Field &field, DParameter *param) const;
+  void apply_boundary_conditions(const Block &block, Field<mix_model, turb_method> &field, DParameter *param) const;
 
   integer n_wall = 0, n_inflow = 0, n_outflow = 0;
   BCInfo *wall_info = nullptr;
   BCInfo *inflow_info = nullptr;
   BCInfo *outflow_info = nullptr;
   Wall *wall = nullptr;
-  Inflow *inflow = nullptr;
+  Inflow<mix_model,turb_method> *inflow = nullptr;
   Outflow *outflow = nullptr;
 };
 
@@ -46,8 +48,10 @@ void link_boundary_and_condition(const std::vector<Boundary> &boundary, BCInfo *
 
 __global__ void apply_outflow(DZone *zone, integer i_face);
 
-__global__ void apply_inflow(DZone *zone, Inflow *inflow, DParameter *param, integer i_face);
+template<MixtureModel mix_model, TurbMethod turb_method>
+__global__ void apply_inflow(DZone *zone, Inflow<mix_model, turb_method> *inflow, DParameter *param, integer i_face);
 
+template<MixtureModel mix_model, TurbMethod turb_method>
 __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i_face);
 
 } // cfd

@@ -22,5 +22,6 @@ void read_until(std::ifstream& file, std::string& input, std::string&& to_find, 
 std::string to_upper(std::string& str);
 std::string to_upper(const std::string& str);
 
+void write_str(const char *str, FILE *file);
 std::string read_str(FILE* file);
 }
