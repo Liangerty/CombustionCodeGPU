@@ -138,7 +138,7 @@ __global__ void update_cv_and_bv(cfd::DZone *zone, DParameter *param) {
   auto &sv = zone->sv;
   if constexpr (mix_model != MixtureModel::Air ||
                 turb_method == TurbMethod::RANS) { // Flamelet method should be written independently.
-    // Multiple species or RANS methods, then there will be scalars to be computed
+    // For multiple species or RANS methods, there will be scalars to be computed
     for (integer l = 0; l < zone->n_scal; ++l) {
       sv(i, j, k, l) = cv(i, j, k, 5 + l) * density_inv;
     }

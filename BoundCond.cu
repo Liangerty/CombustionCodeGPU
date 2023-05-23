@@ -441,7 +441,6 @@ __global__ void apply_inflow(DZone *zone, Inflow<mix_model, turb_method> *inflow
 }
 
 template<MixtureModel mix_model, TurbMethod turb_method>
-requires is_mixture<mix_model>
 __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i_face) {
   const integer ngg = zone->ngg;
   integer dir[]{0, 0, 0};
@@ -466,16 +465,22 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
   }
   const real p{bv(idx[0], idx[1], idx[2], 4)};
 
-  // Mixture
-  const auto mwk = param->mw;
-  real mw{0};
-  for (integer l = 0; l < n_spec; ++l) {
-    sv(i, j, k, l) = sv(idx[0], idx[1], idx[2], l);
-    mw += sv(i, j, k, l) / mwk[l];
+  if constexpr (mix_model!=MixtureModel::Air){
+    // Mixture
+    const auto mwk = param->mw;
+    real mw{0};
+    for (integer l = 0; l < n_spec; ++l) {
+      sv(i, j, k, l) = sv(idx[0], idx[1], idx[2], l);
+      mw += sv(i, j, k, l) / mwk[l];
+    }
+    mw = 1 / mw;
+    bv(i, j, k, 0) = p * mw / (t_wall * cfd::R_u);
+  }else{
+    // Air
+    constexpr real mw{cfd::mw_air};
+    bv(i, j, k, 0) = p * mw / (t_wall * cfd::R_u);
   }
-  mw = 1 / mw;
 
-  bv(i, j, k, 0) = p * mw / (t_wall * cfd::R_u);
   bv(i, j, k, 1) = 0;
   bv(i, j, k, 2) = 0;
   bv(i, j, k, 3) = 0;
@@ -496,21 +501,13 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
     const integer i_in[]{i - g * dir[0], j - g * dir[1], k - g * dir[2]};
     const integer i_gh[]{i + g * dir[0], j + g * dir[1], k + g * dir[2]};
 
-    mw = 0;
-    for (integer l = 0; l < zone->n_spec; ++l) {
-      sv(i_gh[0], i_gh[1], i_gh[2], l) = sv(i_in[0], i_in[1], i_in[2], l);
-      mw += sv(i_gh[0], i_gh[1], i_gh[2], l) / mwk[l];
-    }
-    mw = 1 / mw;
-
-    const double u_i{bv(i_in[0], i_in[1], i_in[2], 1)};
-    const double v_i{bv(i_in[0], i_in[1], i_in[2], 2)};
-    const double w_i{bv(i_in[0], i_in[1], i_in[2], 3)};
-    const double p_i{bv(i_in[0], i_in[1], i_in[2], 4)};
-    const double t_i{bv(i_in[0], i_in[1], i_in[2], 5)};
+    const real u_i{bv(i_in[0], i_in[1], i_in[2], 1)};
+    const real v_i{bv(i_in[0], i_in[1], i_in[2], 2)};
+    const real w_i{bv(i_in[0], i_in[1], i_in[2], 3)};
+    const real p_i{bv(i_in[0], i_in[1], i_in[2], 4)};
+    const real t_i{bv(i_in[0], i_in[1], i_in[2], 5)};
 
     double t_g{t_i};
-
     if (wall->thermal_type == Wall::ThermalType::isothermal) {
       t_g = 2 * t_wall - t_i;  // 0.5*(t_i+t_g)=t_w
       if (t_g <= 0.1 * t_wall) { // improve stability
@@ -518,7 +515,18 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
       }
     }
 
-    const double rho_g{p_i * mw / (t_g * cfd::R_u)};
+    real mw{mw_air};
+    if constexpr (mix_model!=MixtureModel::Air){
+      const auto mwk = param->mw;
+      mw = 0;
+      for (integer l = 0; l < zone->n_spec; ++l) {
+        sv(i_gh[0], i_gh[1], i_gh[2], l) = sv(i_in[0], i_in[1], i_in[2], l);
+        mw += sv(i_gh[0], i_gh[1], i_gh[2], l) / mwk[l];
+      }
+      mw = 1 / mw;
+    }
+
+    const real rho_g{p_i * mw / (t_g * cfd::R_u)};
     bv(i_gh[0], i_gh[1], i_gh[2], 0) = rho_g;
     bv(i_gh[0], i_gh[1], i_gh[2], 1) = -u_i;
     bv(i_gh[0], i_gh[1], i_gh[2], 2) = -v_i;
@@ -538,77 +546,6 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
   }
 }
 
-template<MixtureModel mix_model, TurbMethod turb_method>
-__global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i_face) {
-  const integer ngg = zone->ngg;
-  integer dir[]{0, 0, 0};
-  const auto &b = zone->boundary[i_face];
-  dir[b.face] = b.direction;
-  auto range_start = b.range_start, range_end = b.range_end;
-  integer i = range_start[0] + (integer) (blockDim.x * blockIdx.x + threadIdx.x);
-  integer j = range_start[1] + (integer) (blockDim.y * blockIdx.y + threadIdx.y);
-  integer k = range_start[2] + (integer) (blockDim.z * blockIdx.z + threadIdx.z);
-  if (i > range_end[0] || j > range_end[1] || k > range_end[2]) return;
 
-  auto &bv = zone->bv;
-  auto &cv = zone->cv;
-  auto &sv = zone->sv;
-  const integer n_spec = zone->n_spec;
-
-  real t_wall{wall->temperature};
-
-  const integer idx[]{i - dir[0], j - dir[1], k - dir[2]};
-  if (wall->thermal_type == Wall::ThermalType::adiabatic) {
-    t_wall = bv(idx[0], idx[1], idx[2], 5);
-  }
-  const real p{bv(idx[0], idx[1], idx[2], 4)};
-
-  // Air
-  constexpr real mw{cfd::mw_air};
-  bv(i, j, k, 0) = p * mw / (t_wall * cfd::R_u);
-  bv(i, j, k, 1) = 0;
-  bv(i, j, k, 2) = 0;
-  bv(i, j, k, 3) = 0;
-  bv(i, j, k, 4) = p;
-  bv(i, j, k, 5) = t_wall;
-  cv(i, j, k, 0) = bv(i, j, k, 0);
-  cv(i, j, k, 1) = 0;
-  cv(i, j, k, 2) = 0;
-  cv(i, j, k, 3) = 0;
-  compute_total_energy<mix_model>(i, j, k, zone, param);
-
-  for (int g = 1; g <= ngg; ++g) {
-    const integer i_in[]{i - g * dir[0], j - g * dir[1], k - g * dir[2]};
-    const integer i_gh[]{i + g * dir[0], j + g * dir[1], k + g * dir[2]};
-
-    const double u_i{bv(i_in[0], i_in[1], i_in[2], 1)};
-    const double v_i{bv(i_in[0], i_in[1], i_in[2], 2)};
-    const double w_i{bv(i_in[0], i_in[1], i_in[2], 3)};
-    const double p_i{bv(i_in[0], i_in[1], i_in[2], 4)};
-    const double t_i{bv(i_in[0], i_in[1], i_in[2], 5)};
-
-    double t_g{t_i};
-
-    if (wall->thermal_type == Wall::ThermalType::isothermal) {
-      t_g = 2 * t_wall - t_i;  // 0.5*(t_i+t_g)=t_w
-      if (t_g <= 0.1 * t_wall) { // improve stability
-        t_g = t_wall;
-      }
-    }
-
-    const double rho_g{p_i * mw / (t_g * cfd::R_u)};
-    bv(i_gh[0], i_gh[1], i_gh[2], 0) = rho_g;
-    bv(i_gh[0], i_gh[1], i_gh[2], 1) = -u_i;
-    bv(i_gh[0], i_gh[1], i_gh[2], 2) = -v_i;
-    bv(i_gh[0], i_gh[1], i_gh[2], 3) = -w_i;
-    bv(i_gh[0], i_gh[1], i_gh[2], 4) = p_i;
-    bv(i_gh[0], i_gh[1], i_gh[2], 5) = t_g;
-    cv(i_gh[0], i_gh[1], i_gh[2], 0) = rho_g;
-    cv(i_gh[0], i_gh[1], i_gh[2], 1) = -rho_g * u_i;
-    cv(i_gh[0], i_gh[1], i_gh[2], 2) = -rho_g * v_i;
-    cv(i_gh[0], i_gh[1], i_gh[2], 3) = -rho_g * w_i;
-    compute_total_energy<mix_model>(i_gh[0], i_gh[1], i_gh[2], zone, param);
-  }
-}
 } // cfd
 #endif

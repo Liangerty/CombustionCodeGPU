@@ -7,7 +7,6 @@
 #include <filesystem>
 #include "gxl_lib/MyString.h"
 
-
 namespace cfd {
 class Mesh;
 
@@ -107,7 +106,11 @@ read_flowfield(cfd::Parameter &parameter, const cfd::Mesh &mesh, std::vector<Fie
   if (!exists(out_dir)) {
     printf("The directory to flowfield files does not exist!\n");
   }
-  FILE *fp = fopen((out_dir.string() + std::format("/flowfield{:>4}.plt", parameter.get_int("myid"))).c_str(), "rb");
+  char id[5];
+  sprintf(id,"%4d",parameter.get_int("myid"));
+  std::string id_str=id;
+  FILE *fp = fopen((out_dir.string() + "/flowfield"+id_str+".plt").c_str(), "rb");
+//  FILE *fp = fopen((out_dir.string() + std::format("/flowfield{:>4}.plt", parameter.get_int("myid"))).c_str(), "rb");
 
   std::string magic_number;
   fread(magic_number.data(), 8, 1, fp);

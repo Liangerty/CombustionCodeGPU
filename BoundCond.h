@@ -6,6 +6,7 @@
 #include "ChemData.h"
 #include "Mesh.h"
 #include "Transport.cuh"
+#include <cmath>
 
 namespace cfd {
 template<MixtureModel mix_model=MixtureModel::Air, TurbMethod turb_method=TurbMethod::Laminar>
