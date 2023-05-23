@@ -36,6 +36,13 @@ Driver<mix_model, turb_method>::Driver(Parameter &parameter, Mesh &mesh_):myid(p
   }
 
   initialize_basic_variables(parameter, mesh, field, spec);
+  if(parameter.get_int("initial")==1){
+    // If continue from previous results, then we need the residual scales
+    // If the file does not exist, then we have a trouble
+    std::ifstream res_scale_in("output/message/residual_scale.txt");
+    res_scale_in>>res_scale[0]>>res_scale[1]>>res_scale[2]>>res_scale[3];
+    res_scale_in.close();
+  }
 
 #ifdef GPU
   DParameter d_param(parameter, spec, reac);
@@ -252,7 +259,7 @@ real Driver<mix_model, turb_method>::compute_residual(integer step) {
       create_directories(out_dir);
     }
     std::ofstream res_scale_out(out_dir.string() + "/residual_scale.txt");
-    res_scale_out << std::format("{}\n{}\n{}\n{}\n", res_scale[0], res_scale[1], res_scale[2], res_scale[3]);
+    res_scale_out<<res_scale[0]<<'\n'<<res_scale[1]<<'\n'<<res_scale[2]<<'\n'<<res_scale[3]<<'\n';
     res_scale_out.close();
   }
 
@@ -282,15 +289,21 @@ template<MixtureModel mix_model, TurbMethod turb_method>
 void Driver<mix_model, turb_method>::steady_screen_output(integer step, real err_max) {
   time.get_elapsed_time();
   std::ofstream history("history.dat", std::ios::app);
-  history << std::format("{}\t{}\n", step, err_max);
+  history << step <<'\t'<<err_max<<'\n';
   history.close();
 
-  std::cout << std::format("\n{:>38}    converged to: {:>11.4e}\n", "rho", res[0]);
-  std::cout << std::format("  n={:>8},                       V     converged to: {:>11.4e}   \n", step, res[1]);
-  std::cout << std::format("  n={:>8},                       p     converged to: {:>11.4e}   \n", step, res[2]);
-  std::cout << std::format("{:>38}    converged to: {:>11.4e}\n", "T ", res[3]);
-  std::cout << std::format("CPU time for this step is {:>16.8f}s\n", time.step_time);
-  std::cout << std::format("Total elapsed CPU time is {:>16.8f}s\n", time.elapsed_time);
+  printf("\n%38s    converged to: %11.4e\n", "rho", res[0]);
+  printf("  n=%8d,                       V     converged to: %11.4e   \n", step, res[1]);
+  printf("  n=%8d,                       p     converged to: %11.4e   \n", step, res[2]);
+  printf("%38s    converged to: %11.4e\n", "T ", res[3]);
+  printf("CPU time for this step is %16.8fs\n", time.step_time);
+  printf("Total elapsed CPU time is %16.8fs\n", time.elapsed_time);
+//  std::cout << std::format("\n{:>38}    converged to: {:>11.4e}\n", "rho", res[0]);
+//  std::cout << std::format("  n={:>8},                       V     converged to: {:>11.4e}   \n", step, res[1]);
+//  std::cout << std::format("  n={:>8},                       p     converged to: {:>11.4e}   \n", step, res[2]);
+//  std::cout << std::format("{:>38}    converged to: {:>11.4e}\n", "T ", res[3]);
+//  std::cout << std::format("CPU time for this step is {:>16.8f}s\n", time.step_time);
+//  std::cout << std::format("Total elapsed CPU time is {:>16.8f}s\n", time.elapsed_time);
 }
 
 template<integer N>

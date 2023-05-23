@@ -73,7 +73,11 @@ void Output<mix_model, turb_method>::print_field(integer step, int ngg) const {
   }
 
   const std::filesystem::path out_dir("output/field");
-  FILE *fp = fopen((out_dir.string() + std::format("/flowfield{:>4}.plt", myid)).c_str(), "wb");
+  char id[5];
+  sprintf(id,"%4d",myid);
+  std::string id_str=id;
+  FILE *fp = fopen((out_dir.string() + "/flowfield"+id_str+".plt").c_str(), "wb");
+//  FILE *fp = fopen((out_dir.string() + std::format("/flowfield{:>4}.plt", myid)).c_str(), "wb");
 
   // I. Header section
 
@@ -108,7 +112,7 @@ void Output<mix_model, turb_method>::print_field(integer step, int ngg) const {
     constexpr float zone_marker{299.0f};
     fwrite(&zone_marker, 4, 1, fp);
     // 2. Zone name.
-    gxl::write_str(std::format("zone {}", i).c_str(), fp);
+    gxl::write_str(("zone "+std::to_string(i)).c_str(), fp);
     // 3. Parent zone. No longer used
     constexpr int32_t parent_zone{-1};
     fwrite(&parent_zone, 4, 1, fp);

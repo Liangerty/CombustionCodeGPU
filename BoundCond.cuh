@@ -53,5 +53,4 @@ __global__ void apply_inflow(DZone *zone, Inflow<mix_model, turb_method> *inflow
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i_face);
-
 } // cfd

@@ -18,6 +18,7 @@ add_compile_definitions(GPU)
 project(2_CLionGPU CUDA CXX)
 
 set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND src_file
   BoundCond.h BoundCond.cpp BoundCond.cu BoundCond.cuh
@@ -68,11 +69,12 @@ target_link_directories(2_CLionGPU
   "$<$<CONFIG:Release>:${CMAKE_SOURCE_DIR}/depends/lib/release>"
   )
 
-#target_compile_options(5_TemplateDriver
-#  PUBLIC#private
-#  ${flags}
-#  "$<$<COMPILE_LANGUAGE:CXX>:${flags_release}>"
-#  )
+if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
+  target_compile_options(2_CLionGPU
+    PRIVATE
+      "-Wno-unused-result"
+  )
+endif()
 
 target_link_libraries(2_CLionGPU
   PUBLIC#PRIVATE
