@@ -9,17 +9,16 @@
 namespace cfd {
 
 template<MixtureModel mix_model, TurbMethod turb_method>
-void cfd::Inflow<mix_model, turb_method>::copy_to_gpu(Inflow<mix_model, turb_method> *d_inflow, Species &spec) {
-  if constexpr (mix_model != MixtureModel::Air) {
-    const integer n_spec{spec.n_spec};
-    real *hY = new real[n_spec];
-    for (integer l = 0; l < n_spec; ++l) {
-      hY[l] = yk[l];
-    }
-    delete[]yk;
-    cudaMalloc(&yk, n_spec * sizeof(real));
-    cudaMemcpy(yk, hY, n_spec * sizeof(real), cudaMemcpyHostToDevice);
+void cfd::Inflow<mix_model, turb_method>::copy_to_gpu(Inflow<mix_model, turb_method> *d_inflow, Species &spec,
+                                                      const Parameter &parameter) {
+  const integer n_scalar{parameter.get_int("n_scalar")};
+  real *h_sv = new real[n_scalar];
+  for (integer l = 0; l < n_scalar; ++l) {
+    h_sv[l] = sv[l];
   }
+  delete[]sv;
+  cudaMalloc(&sv, n_scalar * sizeof(real));
+  cudaMemcpy(sv, h_sv, n_scalar * sizeof(real), cudaMemcpyHostToDevice);
 
   cudaMemcpy(d_inflow, this, sizeof(Inflow), cudaMemcpyHostToDevice);
 }
@@ -85,8 +84,8 @@ register_inflow(Inflow<mix_model, turb_method> *&inflows, integer n_bc, std::vec
         continue;
       }
       bc_info[i].label = bc_label;
-      Inflow<mix_model, turb_method> inflow(bc, species);
-      inflow.copy_to_gpu(&(inflows[i]), species);
+      Inflow<mix_model, turb_method> inflow(bc, species, parameter);
+      inflow.copy_to_gpu(&(inflows[i]), species, parameter);
     }
   }
 }
@@ -405,37 +404,31 @@ __global__ void apply_inflow(DZone *zone, Inflow<mix_model, turb_method> *inflow
   auto &cv = zone->cv;
   auto &sv = zone->sv;
 
-  const integer n_spec = zone->n_spec;
+  const integer n_scalar = zone->n_scal;
 
+  const real density = inflow->density;
+  const real u=inflow->u;
+  const real v=inflow->v;
+  const real w=inflow->w;
+  const auto* i_sv=inflow->sv;
   for (integer g = 1; g <= ngg; g++) {
     const integer gi{i + g * dir[0]}, gj{j + g * dir[1]}, gk{k + g * dir[2]};
-    real density = inflow->density;
     bv(gi, gj, gk, 0) = density;
-    bv(gi, gj, gk, 1) = inflow->u;
-    bv(gi, gj, gk, 2) = inflow->v;
-    bv(gi, gj, gk, 3) = inflow->w;
+    bv(gi, gj, gk, 1) = u;
+    bv(gi, gj, gk, 2) = v;
+    bv(gi, gj, gk, 3) = w;
     bv(gi, gj, gk, 4) = inflow->pressure;
     bv(gi, gj, gk, 5) = inflow->temperature;
-    for (int l = 0; l < n_spec; ++l) {
-      sv(gi, gj, gk, l) = inflow->yk[l];
+    for (int l = 0; l < n_scalar; ++l) {
+      sv(gi, gj, gk, l) = i_sv[l];
       if constexpr (mix_model != MixtureModel::FL) {
-        cv(gi, gj, gk, 5 + l) = density * inflow->yk[l];
+        cv(gi, gj, gk, 5 + l) = density * i_sv[l];
       }
-    }
-    if constexpr (turb_method == TurbMethod::RANS) {
-//      sv(gi,gj,gk,n_spec)=inflow->k;
-//      sv(gi,gj,gk,n_spec+1)=inflow->omega;
-      integer i_k = 5 + n_spec;
-      if constexpr (mix_model == MixtureModel::FL) {
-        i_k = 5;
-      }
-//      cv(gi, gj, gk, i_k) = density * inflow->k;
-//      cv(gi, gj, gk, i_k+1) = density * inflow->omega;
     }
     cv(gi, gj, gk, 0) = density;
-    cv(gi, gj, gk, 1) = density * inflow->u;
-    cv(gi, gj, gk, 2) = density * inflow->v;
-    cv(gi, gj, gk, 3) = density * inflow->w;
+    cv(gi, gj, gk, 1) = density * u;
+    cv(gi, gj, gk, 2) = density * v;
+    cv(gi, gj, gk, 3) = density * w;
     compute_total_energy<mix_model>(gi, gj, gk, zone, param);
   }
 }
@@ -465,7 +458,7 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
   }
   const real p{bv(idx[0], idx[1], idx[2], 4)};
 
-  if constexpr (mix_model!=MixtureModel::Air){
+  if constexpr (mix_model != MixtureModel::Air) {
     // Mixture
     const auto mwk = param->mw;
     real mw{0};
@@ -475,7 +468,7 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
     }
     mw = 1 / mw;
     bv(i, j, k, 0) = p * mw / (t_wall * cfd::R_u);
-  }else{
+  } else {
     // Air
     constexpr real mw{cfd::mw_air};
     bv(i, j, k, 0) = p * mw / (t_wall * cfd::R_u);
@@ -516,7 +509,7 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
     }
 
     real mw{mw_air};
-    if constexpr (mix_model!=MixtureModel::Air){
+    if constexpr (mix_model != MixtureModel::Air) {
       const auto mwk = param->mw;
       mw = 0;
       for (integer l = 0; l < zone->n_spec; ++l) {
