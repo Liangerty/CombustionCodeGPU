@@ -114,6 +114,8 @@ void cfd::Field<mix_model, turb_method>::setup_device_memory(const Parameter &pa
   h_ptr->bv.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 6, h_ptr->ngg);
   cudaMemcpy(h_ptr->bv.data(), bv.data(), sizeof(real) * h_ptr->bv.size() * 6, cudaMemcpyHostToDevice);
   h_ptr->bv_last.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 4, 0);
+//  h_ptr->bv_last.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 6, h_ptr->ngg);
+//  h_ptr->residual.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 4, 0);
   h_ptr->vel.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
   h_ptr->acoustic_speed.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
   h_ptr->mach.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);

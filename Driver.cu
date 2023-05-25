@@ -36,11 +36,11 @@ Driver<mix_model, turb_method>::Driver(Parameter &parameter, Mesh &mesh_):myid(p
   }
 
   initialize_basic_variables(parameter, mesh, field, spec);
-  if(parameter.get_int("initial")==1){
+  if (parameter.get_int("initial") == 1) {
     // If continue from previous results, then we need the residual scales
     // If the file does not exist, then we have a trouble
     std::ifstream res_scale_in("output/message/residual_scale.txt");
-    res_scale_in>>res_scale[0]>>res_scale[1]>>res_scale[2]>>res_scale[3];
+    res_scale_in >> res_scale[0] >> res_scale[1] >> res_scale[2] >> res_scale[3];
     res_scale_in.close();
   }
 
@@ -146,12 +146,14 @@ void Driver<mix_model, turb_method>::steady_simulation() {
     // First, store the value of last step
     if (step % output_screen == 0) {
       for (auto b = 0; b < n_block; ++b) {
-        store_last_step <<<bpg[b], tpb >>>(field[b].d_ptr);
+//        store_last_step(field[b].h_ptr);
+        store_last_step<<<bpg[b], tpb>>>(field[b].d_ptr);
       }
     }
 
     for (auto b = 0; b < n_block; ++b) {
-      set_dq_to_0 <<<bpg[b], tpb >>>(field[b].d_ptr);
+      // Set dq to 0
+      cudaMemset(field[b].h_ptr->dq.data(), 0, field[b].h_ptr->dq.size() * n_var * sizeof(real));
 
       // Second, for each block, compute the residual dq
       compute_inviscid_flux<mix_model, turb_method>(mesh[b], field[b].d_ptr, param, n_var);
@@ -259,7 +261,7 @@ real Driver<mix_model, turb_method>::compute_residual(integer step) {
       create_directories(out_dir);
     }
     std::ofstream res_scale_out(out_dir.string() + "/residual_scale.txt");
-    res_scale_out<<res_scale[0]<<'\n'<<res_scale[1]<<'\n'<<res_scale[2]<<'\n'<<res_scale[3]<<'\n';
+    res_scale_out << res_scale[0] << '\n' << res_scale[1] << '\n' << res_scale[2] << '\n' << res_scale[3] << '\n';
     res_scale_out.close();
   }
 
@@ -289,7 +291,7 @@ template<MixtureModel mix_model, TurbMethod turb_method>
 void Driver<mix_model, turb_method>::steady_screen_output(integer step, real err_max) {
   time.get_elapsed_time();
   std::ofstream history("history.dat", std::ios::app);
-  history << step <<'\t'<<err_max<<'\n';
+  history << step << '\t' << err_max << '\n';
   history.close();
 
   printf("\n%38s    converged to: %11.4e\n", "rho", res[0]);

@@ -8,6 +8,7 @@
 namespace cfd {
 struct DZone;
 
+//void store_last_step(DZone *zone);
 __global__ void store_last_step(DZone *zone);
 
 __global__ void set_dq_to_0(cfd::DZone* zone);

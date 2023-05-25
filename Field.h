@@ -24,7 +24,8 @@ struct DZone {
   ggxl::VectorField3D<real> cv; // Conservative variable: 0-:rho, 1-:rho*u, 2-:rho*v, 3-:rho*w, 4-:rho*(E+V*V/2), 5->(4+Ns)-:rho*Y
   ggxl::VectorField3D<real> bv; // Basic variable: 0-density, 1-u, 2-v, 3-w, 4-pressure, 5-temperature
   ggxl::VectorField3D<real> sv; // Scalar variables: [0,n_spec) - mass fractions; [n_spec,n_spec+n_turb) - turbulent variables
-  ggxl::VectorField3D<real> bv_last; // Basic variable of last step: 0-density, 1-velocity magnitude, 2-pressure, 3-temperature
+  ggxl::VectorField3D<real> bv_last; // Basic variable of last step
+//  ggxl::VectorField3D<real> residual; // The residual of density, velocity magnitude, pressure, and temperature
   ggxl::Array3D<real> vel;      // Velocity magnitude
   ggxl::Array3D<real> acoustic_speed;
   ggxl::Array3D<real> mach;     // Mach number
