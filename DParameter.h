@@ -18,7 +18,7 @@ struct DParameter {
   integer reconstruction=2; // The reconstruction method for inviscid flux computation
   integer limiter=0;  // The tag for limiter method
   integer viscous_scheme=0; // The tag for viscous scheme. 0 - Inviscid, 2 - 2nd order central discretization
-  integer temporal_scheme=0;  // The tag for temporal scheme. 1 - 1st order explicit Euler
+  integer rans_model=0;  // The tag for RANS model. 0 - Laminar, 1 - SA, 2 - SST
 //  integer output_screen=10; // determine the interval between screen outputs
   real Pr=0.72;
   real cfl=1;

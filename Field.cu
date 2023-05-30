@@ -23,6 +23,7 @@ cfd::Field<mix_model, turb_method>::Field(Parameter &parameter, const Block &blo
   }
   sv.resize(mx, my, mz, n_scalar, ngg);
   ov.resize(mx, my, mz, n_other_var, ngg);
+  var_without_ghost_grid.resize(mx, my, mz, 1, 0); // Only to have wall_dist, if more are needed, then add nl.
 }
 
 template<MixtureModel mix_model, TurbMethod turb_method>
@@ -36,7 +37,7 @@ void cfd::Field<mix_model, turb_method>::initialize_basic_variables(const Parame
                                                                     const std::vector<real> &ze) {
   const auto n = inflows.size();
   std::vector<real> rho(n, 0), u(n, 0), v(n, 0), w(n, 0), p(n, 0), T(n, 0);
-  const integer n_scalar=parameter.get_int("n_scalar");
+  const integer n_scalar = parameter.get_int("n_scalar");
   gxl::MatrixDyn<real> scalar_inflow{static_cast<int>(n), n_scalar};
 
   for (size_t i = 0; i < inflows.size(); ++i) {
@@ -70,8 +71,8 @@ void cfd::Field<mix_model, turb_method>::initialize_basic_variables(const Parame
         bv(i, j, k, 3) = w[i_init];
         bv(i, j, k, 4) = p[i_init];
         bv(i, j, k, 5) = T[i_init];
-        for (integer l=0;l<n_scalar;++l){
-          sv(i,j,k,l)=scalar_inflow(static_cast<int>(i_init), l);
+        for (integer l = 0; l < n_scalar; ++l) {
+          sv(i, j, k, l) = scalar_inflow(static_cast<int>(i_init), l);
         }
       }
     }
@@ -132,6 +133,10 @@ void cfd::Field<mix_model, turb_method>::setup_device_memory(const Parameter &pa
   }
   if constexpr (turb_method == TurbMethod::RANS) {
     h_ptr->mut.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
+    if (parameter.get_int("RANS_model") == 2) {
+      // SST
+      h_ptr->wall_distance.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 0);
+    }
   }
 
   h_ptr->dq.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_var, 0);

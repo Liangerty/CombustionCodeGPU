@@ -8,7 +8,7 @@
 cfd::Parameter::Parameter(const MpiParallel &mpi_parallel) {
   read_param_from_file();
   int_parameters["myid"] = mpi_parallel.my_id;
-  //int_parameters["n_proc"] = mpi_parallel.n_proc; // Currently commented, assuming the n_proc is not needed outside the class MpiParallel
+  int_parameters["n_proc"] = mpi_parallel.n_proc;
   bool_parameters["parallel"] = cfd::MpiParallel::parallel;
 }
 

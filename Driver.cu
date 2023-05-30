@@ -8,6 +8,7 @@
 #include <filesystem>
 #include "Parallel.h"
 #include <iostream>
+#include <mpi.h>
 
 namespace cfd {
 // Instantiate all possible drivers
@@ -70,6 +71,14 @@ void Driver<mix_model, turb_method>::initialize_computation() {
     compute_cv_from_bv<mix_model, turb_method><<<bpg, tpb>>>(field[i].d_ptr, param);
   }
 
+  // If we use k-omega SST model, we need the wall distance, thus we need to compute or read it here.
+  if constexpr (turb_method == TurbMethod::RANS) {
+    if (parameter.get_int("RANS_model") == 2) {
+      // SST method
+      acquire_wall_distance();
+    }
+  }
+
   // Second, apply boundary conditions to all boundaries, including face communication between faces
   for (integer b = 0; b < mesh.n_block; ++b) {
     bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
@@ -110,6 +119,69 @@ void Driver<mix_model, turb_method>::simulate() {
       case 12:break;
       default:printf("Not implemented");
     }
+  }
+}
+
+template<MixtureModel mix_model, TurbMethod turb_method>
+void Driver<mix_model, turb_method>::acquire_wall_distance() {
+  integer method_for_wall_distance{parameter.get_int("wall_distance")};
+  if (method_for_wall_distance == 0) {
+    // We need to compute it.
+
+    // Store all wall coordinates of this process in the vector
+    std::vector<real> wall_coor;
+    for (integer iw = 0; iw < bound_cond.n_wall; ++iw) {
+      auto &info = bound_cond.wall_info[iw];
+      const auto nb = info.n_boundary;
+      for (size_t m = 0; m < nb; m++) {
+        auto i_zone = info.boundary[m].x;
+        auto &x = mesh[i_zone].x;
+        auto &y = mesh[i_zone].y;
+        auto &z = mesh[i_zone].z;
+        auto &f = mesh[i_zone].boundary[info.boundary[m].y];
+        for (integer k = f.range_start[2]; k <= f.range_end[2]; ++k) {
+          for (integer j = f.range_start[1]; j <= f.range_end[1]; ++j) {
+            for (integer i = f.range_start[0]; i <= f.range_end[0]; ++i) {
+              wall_coor.push_back(x(i, j, k));
+              wall_coor.push_back(y(i, j, k));
+              wall_coor.push_back(z(i, j, k));
+            }
+          }
+        }
+      }
+    }
+    const integer n_proc{parameter.get_int("n_proc")};
+    integer *n_wall_point = new integer[n_proc];
+    integer n_wall_this=static_cast<integer>(wall_coor.size());
+    MPI_Allgather(&n_wall_this, 1, MPI_INT, n_wall_point, 1, MPI_INT, MPI_COMM_WORLD);
+    integer *disp = new integer[n_proc];
+    disp[0] = 0;
+    for (integer i = 1; i < n_proc; ++i) {
+      disp[i] = disp[i - 1] + n_wall_point[i - 1];
+    }
+    integer total_wall_number{0};
+    for (integer i = 0; i < n_proc; ++i) {
+      total_wall_number += n_wall_point[i];
+    }
+    std::vector<real> wall_points(total_wall_number, 0);
+    MPI_Allgatherv(wall_coor.data(), n_wall_point[myid], MPI_DOUBLE, wall_points.data(), n_wall_point, disp, MPI_DOUBLE,
+                   MPI_COMM_WORLD);
+    real *wall_corr_gpu = nullptr;
+    cudaMalloc(&wall_corr_gpu, total_wall_number * sizeof(real));
+    cudaMemcpy(wall_corr_gpu, wall_points.data(), total_wall_number * sizeof(real), cudaMemcpyHostToDevice);
+    for (integer blk = 0; blk < mesh.n_block; ++blk) {
+      const integer mx{mesh[blk].mx}, my{mesh[blk].my}, mz{mesh[blk].mz};
+      dim3 tpb{512, 1, 1};
+      dim3 bpg{(mx - 1) / tpb.x + 1, (my - 1) / tpb.y + 1, (mz - 1) / tpb.z + 1};
+      compute_wall_distance<<<bpg, tpb>>>(wall_corr_gpu, field[blk].d_ptr, total_wall_number);
+      cudaMemcpy(field[blk].var_without_ghost_grid.data(), field[blk].h_ptr->wall_distance.data(), field[blk].h_ptr->wall_distance.size()*sizeof(real),cudaMemcpyDeviceToHost);
+    }
+    if (myid==0){
+      printf("Finish computing wall distance.\n");
+    }
+
+  } else {
+    // We need to read it.
   }
 }
 
@@ -352,4 +424,26 @@ __global__ void reduction_of_dv_squared(real *arr, integer size) {
   }
 }
 
+__global__ void compute_wall_distance(const real *wall_point_coor, DZone *zone, integer n_point_times3) {
+  const integer extent[3]{zone->mx, zone->my, zone->mz};
+  const integer i = blockDim.x * blockIdx.x + threadIdx.x;
+  const integer j = blockDim.y * blockIdx.y + threadIdx.y;
+  const integer k = blockDim.z * blockIdx.z + threadIdx.z;
+  if (i >= extent[0] || j >= extent[1] || k >= extent[2]) return;
+
+  const real x{zone->x(i, j, k)}, y{zone->y(i, j, k)}, z{zone->z(i, j, k)};
+  const integer n_wall_point = n_point_times3 / 3;
+  auto &wall_dist = zone->wall_distance(i, j, k);
+  wall_dist = 1e+6;
+  for (integer l = 0; l < n_wall_point; ++l) {
+    const integer idx = 3 * l;
+    real d = (x - wall_point_coor[idx]) * (x - wall_point_coor[idx]) +
+             (y - wall_point_coor[idx + 1]) * (y - wall_point_coor[idx + 1]) +
+             (z - wall_point_coor[idx + 2]) * (z - wall_point_coor[idx + 2]);
+    if (wall_dist > d) {
+      wall_dist = d;
+    }
+  }
+  wall_dist=std::sqrt(wall_dist);
+}
 } // cfd

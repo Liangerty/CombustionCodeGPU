@@ -18,6 +18,9 @@ struct Driver {
 
   void simulate();
 private:
+
+  void acquire_wall_distance();
+
   void steady_simulation();
 
   real compute_residual(integer step);
@@ -43,4 +46,6 @@ public:
 
 template<integer N>
 __global__ void reduction_of_dv_squared(real *arr_to_sum, integer size);
+
+__global__ void compute_wall_distance(const real *wall_point_coor, DZone *zone, integer n_point_times3);
 } // cfd

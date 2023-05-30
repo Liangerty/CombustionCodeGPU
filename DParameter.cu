@@ -11,8 +11,8 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter,Species& species, Reaction
                                                                               limiter{parameter.get_int("limiter")},
                                                                               viscous_scheme{
                                                                                   parameter.get_int("viscous_order")},
-                                                                              temporal_scheme{
-                                                                                  parameter.get_int("temporal_scheme")},
+                                                                              rans_model{
+                                                                                  parameter.get_int("RANS_model")},
                                                                               /*output_screen(
                                                                                   parameter.get_int("output_screen")),*/
                                                                               Pr(parameter.get_real("prandtl_number")),

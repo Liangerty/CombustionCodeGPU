@@ -407,10 +407,10 @@ __global__ void apply_inflow(DZone *zone, Inflow<mix_model, turb_method> *inflow
   const integer n_scalar = zone->n_scal;
 
   const real density = inflow->density;
-  const real u=inflow->u;
-  const real v=inflow->v;
-  const real w=inflow->w;
-  const auto* i_sv=inflow->sv;
+  const real u = inflow->u;
+  const real v = inflow->v;
+  const real w = inflow->w;
+  const auto *i_sv = inflow->sv;
   for (integer g = 1; g <= ngg; g++) {
     const integer gi{i + g * dir[0]}, gj{j + g * dir[1]}, gk{k + g * dir[2]};
     bv(gi, gj, gk, 0) = density;
@@ -458,37 +458,57 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
   }
   const real p{bv(idx[0], idx[1], idx[2], 4)};
 
+  real rho_wall{0};
+  real mw{cfd::mw_air};
   if constexpr (mix_model != MixtureModel::Air) {
     // Mixture
     const auto mwk = param->mw;
-    real mw{0};
     for (integer l = 0; l < n_spec; ++l) {
       sv(i, j, k, l) = sv(idx[0], idx[1], idx[2], l);
       mw += sv(i, j, k, l) / mwk[l];
     }
     mw = 1 / mw;
-    bv(i, j, k, 0) = p * mw / (t_wall * cfd::R_u);
-  } else {
-    // Air
-    constexpr real mw{cfd::mw_air};
-    bv(i, j, k, 0) = p * mw / (t_wall * cfd::R_u);
   }
 
+  rho_wall = p * mw / (t_wall * cfd::R_u);
+  bv(i, j, k, 0) = rho_wall;
   bv(i, j, k, 1) = 0;
   bv(i, j, k, 2) = 0;
   bv(i, j, k, 3) = 0;
   bv(i, j, k, 4) = p;
   bv(i, j, k, 5) = t_wall;
-  cv(i, j, k, 0) = bv(i, j, k, 0);
+  cv(i, j, k, 0) = rho_wall;
   cv(i, j, k, 1) = 0;
   cv(i, j, k, 2) = 0;
   cv(i, j, k, 3) = 0;
   if constexpr (mix_model != MixtureModel::FL) {
     for (integer l = 0; l < n_spec; ++l) {
-      cv(i, j, k, l + 5) = sv(i, j, k, l) * bv(i, j, k, 0);
+      cv(i, j, k, l + 5) = sv(i, j, k, l) * rho_wall;
     }
   }
   compute_total_energy<mix_model>(i, j, k, zone, param);
+
+  // turbulent boundary condition
+  if constexpr (turb_method == TurbMethod::RANS) {
+    if (param->rans_model == 2) {
+      // SST
+      real mu_wall{0};
+      if constexpr (mix_model != MixtureModel::Air) {
+        mu_wall = compute_viscosity(i, j, k, t_wall, mw, param, zone);
+      } else {
+        mu_wall = Sutherland(t_wall);
+      }
+      const real dy = zone->wall_distance(idx[0], idx[1], idx[2]);
+      sv(i, j, k, n_spec) = 0;
+      cv(i, j, k, n_spec + 5) = 0;
+      if (dy > 1e-25) {
+        sv(i, j, k, n_spec + 1) = 60 * mu_wall / (rho_wall * SST::beta_1 * dy * dy);
+      } else {
+        sv(i, j, k, n_spec + 1) = sv(idx[0], idx[1], idx[2], n_spec + 1);
+      }
+      cv(i, j, k, n_spec + 6) = rho_wall * sv(i, j, k, n_spec + 1);
+    }
+  }
 
   for (int g = 1; g <= ngg; ++g) {
     const integer i_in[]{i - g * dir[0], j - g * dir[1], k - g * dir[2]};
@@ -508,7 +528,6 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
       }
     }
 
-    real mw{mw_air};
     if constexpr (mix_model != MixtureModel::Air) {
       const auto mwk = param->mw;
       mw = 0;
@@ -536,6 +555,17 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
       }
     }
     compute_total_energy<mix_model>(i_gh[0], i_gh[1], i_gh[2], zone, param);
+
+    // turbulent boundary condition
+    if constexpr (turb_method == TurbMethod::RANS) {
+      if (param->rans_model == 2) {
+        // SST
+        sv(i_gh[0], i_gh[1], i_gh[2], n_spec) = 0;
+        cv(i_gh[0], i_gh[1], i_gh[2], n_spec + 5) = 0;
+        sv(i_gh[0], i_gh[1], i_gh[2], n_spec + 1) = sv(i, j, k, n_spec + 1);
+        cv(i_gh[0], i_gh[1], i_gh[2], n_spec + 6) = sv(i, j, k, n_spec + 1) * rho_g;
+      }
+    }
   }
 }
 
