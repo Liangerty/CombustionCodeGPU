@@ -463,6 +463,7 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
   if constexpr (mix_model != MixtureModel::Air) {
     // Mixture
     const auto mwk = param->mw;
+    mw = 0;
     for (integer l = 0; l < n_spec; ++l) {
       sv(i, j, k, l) = sv(idx[0], idx[1], idx[2], l);
       mw += sv(i, j, k, l) / mwk[l];
