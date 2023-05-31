@@ -65,13 +65,6 @@ void Driver<mix_model, turb_method>::initialize_computation() {
   }
   const auto ng_1 = 2 * mesh[0].ngg - 1;
 
-  // First, compute the conservative variables from basic variables
-  for (auto i = 0; i < mesh.n_block; ++i) {
-    integer mx{mesh[i].mx}, my{mesh[i].my}, mz{mesh[i].mz};
-    dim3 bpg{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
-    compute_cv_from_bv<mix_model, turb_method><<<bpg, tpb>>>(field[i].d_ptr, param);
-  }
-
   // If we use k-omega SST model, we need the wall distance, thus we need to compute or read it here.
   if constexpr (turb_method == TurbMethod::RANS) {
     if (parameter.get_int("RANS_model") == 2) {
@@ -79,6 +72,18 @@ void Driver<mix_model, turb_method>::initialize_computation() {
       acquire_wall_distance();
     }
   }
+
+  // First, compute the conservative variables from basic variables
+  for (auto i = 0; i < mesh.n_block; ++i) {
+    integer mx{mesh[i].mx}, my{mesh[i].my}, mz{mesh[i].mz};
+    dim3 bpg{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
+    compute_cv_from_bv<mix_model, turb_method><<<bpg, tpb>>>(field[i].d_ptr, param);
+    if constexpr (turb_method == TurbMethod::RANS) {
+      // We need the wall distance here. And the mut are computed for bc
+      initialize_mut<mix_model><<<bpg, tpb >>>(field[i].d_ptr, param);
+    }
+  }
+  cudaDeviceSynchronize();
 
   // Second, apply boundary conditions to all boundaries, including face communication between faces
   for (integer b = 0; b < mesh.n_block; ++b) {

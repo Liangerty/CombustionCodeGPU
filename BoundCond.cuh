@@ -46,6 +46,7 @@ void count_boundary_of_type_bc(const std::vector<Boundary> &boundary, integer n_
 void link_boundary_and_condition(const std::vector<Boundary> &boundary, BCInfo *bc, integer n_bc, const integer *sep,
                                  integer i_zone);
 
+template<TurbMethod turb_method>
 __global__ void apply_outflow(DZone *zone, integer i_face);
 
 template<MixtureModel mix_model, TurbMethod turb_method>

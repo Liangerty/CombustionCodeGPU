@@ -117,7 +117,7 @@ DBoundCond<mix_model, turb_method>::apply_boundary_conditions(const Block &block
         bpg[j] = (n_point - 1) / tpb[j] + 1;
       }
       dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-      apply_outflow<<<BPG, TPB>>>(field.d_ptr, i_face);
+      apply_outflow<turb_method> <<<BPG, TPB>>>(field.d_ptr, i_face);
     }
   }
 
@@ -138,7 +138,7 @@ DBoundCond<mix_model, turb_method>::apply_boundary_conditions(const Block &block
         bpg[j] = (n_point - 1) / tpb[j] + 1;
       }
       dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-      apply_inflow<<<BPG, TPB>>>(field.d_ptr, &inflow[l], param, i_face);
+      apply_inflow<mix_model, turb_method> <<<BPG, TPB>>>(field.d_ptr, &inflow[l], param, i_face);
     }
   }
 
@@ -358,6 +358,7 @@ void link_boundary_and_condition(const std::vector<Boundary> &boundary, BCInfo *
   }
 }
 
+template<TurbMethod turb_method>
 __global__ void apply_outflow(DZone *zone, integer i_face) {
   const integer ngg = zone->ngg;
   integer dir[]{0, 0, 0};
@@ -384,6 +385,9 @@ __global__ void apply_outflow(DZone *zone, integer i_face) {
     }
     for (integer l = 0; l < zone->n_scal; ++l) {
       sv(gi, gj, gk, l) = sv(i, j, k, l);
+    }
+    if constexpr (turb_method == TurbMethod::RANS) {
+      zone->mut(gi, gj, gk) = zone->mut(i, j, k);
     }
   }
 }
@@ -430,6 +434,9 @@ __global__ void apply_inflow(DZone *zone, Inflow<mix_model, turb_method> *inflow
     cv(gi, gj, gk, 2) = density * v;
     cv(gi, gj, gk, 3) = density * w;
     compute_total_energy<mix_model>(gi, gj, gk, zone, param);
+    if constexpr (turb_method == TurbMethod::RANS) {
+      zone->mut(gi, gj, gk) = inflow->mut;
+    }
   }
 }
 
@@ -565,6 +572,7 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
         cv(i_gh[0], i_gh[1], i_gh[2], n_spec + 5) = 0;
         sv(i_gh[0], i_gh[1], i_gh[2], n_spec + 1) = sv(i, j, k, n_spec + 1);
         cv(i_gh[0], i_gh[1], i_gh[2], n_spec + 6) = sv(i, j, k, n_spec + 1) * rho_g;
+        zone->mut(i_gh[0], i_gh[1], i_gh[2]) = 0;
       }
     }
   }

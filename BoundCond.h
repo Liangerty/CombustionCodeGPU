@@ -28,6 +28,7 @@ struct Inflow {
   real *sv = nullptr;
   real mw = mw_air;
   real viscosity = 0;
+  real mut = 0;
 };
 
 struct Wall {
@@ -127,7 +128,7 @@ cfd::Inflow<mix_model, turb_method>::Inflow(
   }
 
   if constexpr (turb_method == TurbMethod::RANS) {
-    real mut = std::get<real>(info.at("turb_viscosity_ratio")) * viscosity;
+    mut = std::get<real>(info.at("turb_viscosity_ratio")) * viscosity;
     if (info.find("turbulence_intensity") != info.end()) {
       // For SST model, we need k and omega. If SA, we compute this for nothing.
       const real turbulence_intensity = std::get<real>(info.at("turbulence_intensity"));
