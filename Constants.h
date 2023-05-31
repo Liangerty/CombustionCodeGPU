@@ -28,7 +28,26 @@ constexpr double mw_air = 28.9647;
 
 // Some model constants
 struct SST{
+  static constexpr double beta_star=0.09;
+  static constexpr double sqrt_beta_star=0.3;
+  static constexpr double kappa=0.41;
+  // SST inner parameters, the first group:
+  static constexpr double sigma_k1=0.85;
+  static constexpr double sigma_omega1=0.5;
   static constexpr double beta_1=0.0750;
   static constexpr double a_1=0.31;
+  static constexpr double gamma1=beta_1/beta_star-sigma_omega1*kappa*kappa/sqrt_beta_star;
+
+  // k-epsilon parameters, the second group:
+  static constexpr double sigma_k2=1;
+  static constexpr double sigma_omega2=0.856;
+  static constexpr double beta_2=0.0828;
+  static constexpr double gamma2=beta_2/beta_star-sigma_omega2*kappa*kappa/sqrt_beta_star;
+
+  // Mixed parameters, their difference, used in computations
+  static constexpr double delta_sigma_k=sigma_k1-sigma_k2;
+  static constexpr double delta_sigma_omega=sigma_omega1-sigma_omega2;
+  static constexpr double delta_beta=beta_1-beta_2;
+  static constexpr double delta_gamma=gamma1-gamma2;
 };
 }

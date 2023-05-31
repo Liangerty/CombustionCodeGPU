@@ -2,6 +2,8 @@
 
 #include "Define.h"
 #include "Thermo.cuh"
+#include "Constants.h"
+#include <cmath>
 
 namespace cfd {
 
@@ -63,15 +65,27 @@ __device__ void compute_fv_2nd_order(const integer idx[3], DZone *zone, real *fv
   const real w_y = w_xi * xi_y + w_eta * eta_y + w_zeta * zeta_y;
   const real w_z = w_xi * xi_z + w_eta * eta_z + w_zeta * zeta_z;
 
-  const real viscosity = 0.5 * (zone->mul(i, j, k) + zone->mul(i + 1, j, k));
+  real viscosity = 0.5 * (zone->mul(i, j, k) + zone->mul(i + 1, j, k));
+  if constexpr (turb_method == TurbMethod::RANS) {
+    viscosity += 0.5 * (zone->mut(i, j, k) + zone->mut(i + 1, j, k));
+  }
 
   // Compute the viscous stress
-  const real tau_xx = viscosity * (4 * u_x - 2 * v_y - 2 * w_z) / 3.0;
-  const real tau_yy = viscosity * (4 * v_y - 2 * u_x - 2 * w_z) / 3.0;
-  const real tau_zz = viscosity * (4 * w_z - 2 * u_x - 2 * v_y) / 3.0;
+  real tau_xx = viscosity * (4 * u_x - 2 * v_y - 2 * w_z) / 3.0;
+  real tau_yy = viscosity * (4 * v_y - 2 * u_x - 2 * w_z) / 3.0;
+  real tau_zz = viscosity * (4 * w_z - 2 * u_x - 2 * v_y) / 3.0;
   const real tau_xy = viscosity * (u_y + v_x);
   const real tau_xz = viscosity * (u_z + w_x);
   const real tau_yz = viscosity * (v_z + w_y);
+  if constexpr (turb_method == TurbMethod::RANS) {
+    if (param->rans_model == 2) {
+      // SST
+      const real twoThirdrhoKm = -2 / 3 * 0.5 * (zone->cv(i, j, k, zone->n_spec) + zone->cv(i + 1, j, k, zone->n_spec));
+      tau_xx += twoThirdrhoKm;
+      tau_yy += twoThirdrhoKm;
+      tau_zz += twoThirdrhoKm;
+    }
+  }
 
   const real xi_x_div_jac = 0.5 * (m(1, 1) * zone->jac(i, j, k) + m1(1, 1) * zone->jac(i + 1, j, k));
   const real xi_y_div_jac = 0.5 * (m(1, 2) * zone->jac(i, j, k) + m1(1, 2) * zone->jac(i + 1, j, k));
@@ -129,6 +143,70 @@ __device__ void compute_fv_2nd_order(const integer idx[3], DZone *zone, real *fv
                   (xi_x_div_jac * rho_uc + xi_y_div_jac * rho_vc + xi_z_div_jac * rho_wc);
     }
   }
+
+  if constexpr (turb_method == TurbMethod::RANS) {
+    const integer rans_model{param->rans_model};
+    const integer n_spec{zone->n_spec};
+    const integer it = zone->n_spec;
+    auto &sv = zone->sv;
+
+    switch (rans_model) {
+      case 1: // SA
+        break;
+      case 2: // SST
+      default:
+        // Default SST
+        const real k_xi = sv(i + 1, j, k, it) - sv(i, j, k, it);
+        const real k_eta =
+            0.25 * (sv(i, j + 1, k, it) - sv(i, j - 1, k, it) + sv(i + 1, j + 1, k, it) - sv(i + 1, j - 1, k, it));
+        const real k_zeta =
+            0.25 * (sv(i, j, k + 1, it) - sv(i, j, k - 1, it) + sv(i + 1, j, k + 1, it) - sv(i + 1, j, k - 1, it));
+
+        const real k_x = k_xi * xi_x + k_eta * eta_x + k_zeta * zeta_x;
+        const real k_y = k_xi * xi_y + k_eta * eta_y + k_zeta * zeta_y;
+        const real k_z = k_xi * xi_z + k_eta * eta_z + k_zeta * zeta_z;
+
+        const real omega_xi = sv(i + 1, j, k, it + 1) - sv(i, j, k, it + 1);
+        const real omega_eta = 0.25 * (sv(i, j + 1, k, it + 1) - sv(i, j - 1, k, it + 1) + sv(i + 1, j + 1, k, it + 1) -
+                                       sv(i + 1, j - 1, k, it + 1));
+        const real omega_zeta = 0.25 *
+                                (sv(i, j, k + 1, it + 1) - sv(i, j, k - 1, it + 1) + sv(i + 1, j, k + 1, it + 1) -
+                                 sv(i + 1, j, k - 1, it + 1));
+
+        const real omega_x = omega_xi * xi_x + omega_eta * eta_x + omega_zeta * zeta_x;
+        const real omega_y = omega_xi * xi_y + omega_eta * eta_y + omega_zeta * zeta_y;
+        const real omega_z = omega_xi * xi_z + omega_eta * eta_z + omega_zeta * zeta_z;
+
+        const real mu_l = 0.5 * (zone->mul(i, j, k) + zone->mul(i + 1, j, k));
+
+        const real wall_dist = 0.5 * (zone->wall_distance(i, j, k) + zone->wall_distance(i + 1, j, k));
+
+        real f1{1};
+        if (wall_dist > 1e-25) {
+          const real km = 0.5 * (sv(i, j, k, it) + sv(i + 1, j, k, it));
+          const real omegam = 0.5 * (sv(i, j, k, it + 1) + sv(i + 1, j, k, it + 1));
+          const real param1{std::sqrt(km) / (0.09 * omegam * wall_dist)};
+
+          const real rhom = 0.5 * (pv(i, j, k, 0) + pv(i + 1, j, k, 0));
+          const real d2 = wall_dist * wall_dist;
+          const real param2{500 * mu_l / (rhom * d2 * omegam)};
+          const real CDkomega{max(1e-20, 2 * rhom * cfd::SST::sigma_omega2 / omegam *
+                                         (k_x * omega_x + k_y * omega_y + k_z * omega_z))};
+          const real param3{4 * rhom * SST::sigma_omega2 * km / (CDkomega * d2)};
+
+          const real arg1{min(max(param1, param2), param3)};
+          f1 = std::tanh(arg1 * arg1 * arg1 * arg1);
+        }
+
+        const real sigma_k = SST::sigma_k2 + SST::delta_sigma_k * f1;
+        const real sigma_omega = SST::sigma_omega2 + SST::delta_sigma_omega * f1;
+
+        const real mu_t = 0.5 * (zone->mut(i, j, k) + zone->mut(i + 1, j, k));
+        fv[5 + n_spec] = (mu_l + mu_t * sigma_k) * (xi_x_div_jac * k_x + xi_y_div_jac * k_y + xi_z_div_jac * k_z);
+        fv[6 + n_spec] =
+            (mu_l + mu_t * sigma_omega) * (xi_x_div_jac * omega_x + xi_y_div_jac * omega_y + xi_z_div_jac * omega_z);
+    }
+  }
 }
 
 template<MixtureModel mix_model, TurbMethod turb_method>
@@ -177,15 +255,28 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
   const real w_y = w_xi * xi_y + w_eta * eta_y + w_zeta * zeta_y;
   const real w_z = w_xi * xi_z + w_eta * eta_z + w_zeta * zeta_z;
 
-  const real viscosity = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j + 1, k));
+  real viscosity = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j + 1, k));
+  if constexpr (turb_method == TurbMethod::RANS) {
+    viscosity += 0.5 * (zone->mut(i, j, k) + zone->mut(i, j + 1, k));
+  }
 
   // Compute the viscous stress
-  const real tau_xx = viscosity * (4 * u_x - 2 * v_y - 2 * w_z) / 3.0;
-  const real tau_yy = viscosity * (4 * v_y - 2 * u_x - 2 * w_z) / 3.0;
-  const real tau_zz = viscosity * (4 * w_z - 2 * u_x - 2 * v_y) / 3.0;
+  real tau_xx = viscosity * (4 * u_x - 2 * v_y - 2 * w_z) / 3.0;
+  real tau_yy = viscosity * (4 * v_y - 2 * u_x - 2 * w_z) / 3.0;
+  real tau_zz = viscosity * (4 * w_z - 2 * u_x - 2 * v_y) / 3.0;
   const real tau_xy = viscosity * (u_y + v_x);
   const real tau_xz = viscosity * (u_z + w_x);
   const real tau_yz = viscosity * (v_z + w_y);
+
+  if constexpr (turb_method == TurbMethod::RANS) {
+    if (param->rans_model == 2) {
+      // SST
+      const real twoThirdrhoKm = -2 / 3 * 0.5 * (zone->cv(i, j, k, zone->n_spec) + zone->cv(i, j + 1, k, zone->n_spec));
+      tau_xx += twoThirdrhoKm;
+      tau_yy += twoThirdrhoKm;
+      tau_zz += twoThirdrhoKm;
+    }
+  }
 
   const real eta_x_div_jac = 0.5 * (m(2, 1) * zone->jac(i, j, k) + m1(2, 1) * zone->jac(i, j + 1, k));
   const real eta_y_div_jac = 0.5 * (m(2, 2) * zone->jac(i, j, k) + m1(2, 2) * zone->jac(i, j + 1, k));
@@ -207,7 +298,7 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
   gv[4] = um * gv[1] + vm * gv[2] + wm * gv[3] +
           conductivity * (eta_x_div_jac * t_x + eta_y_div_jac * t_y + eta_z_div_jac * t_z);
 
-  if constexpr (mix_model!=MixtureModel::Air){
+  if constexpr (mix_model != MixtureModel::Air) {
     const integer n_spec{zone->n_spec};
     const auto &y = zone->sv;
 
@@ -220,7 +311,8 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
 
       const real y_xi = 0.25 * (y(i + 1, j, k, l) - y(i - 1, j, k, l) + y(i + 1, j + 1, k, l) - y(i - 1, j + 1, k, l));
       const real y_eta = y(i, j + 1, k, l) - y(i, j, k, l);
-      const real y_zeta = 0.25 * (y(i, j, k + 1, l) - y(i, j, k - 1, l) + y(i, j + 1, k + 1, l) - y(i, j + 1, k - 1, l));
+      const real y_zeta =
+          0.25 * (y(i, j, k + 1, l) - y(i, j, k - 1, l) + y(i, j + 1, k + 1, l) - y(i, j + 1, k - 1, l));
 
       y_x[l] = y_xi * xi_x + y_eta * eta_x + y_zeta * zeta_x;
       y_y[l] = y_xi * xi_y + y_eta * eta_y + y_zeta * zeta_y;
@@ -240,6 +332,71 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
       gv[5 + l] = diffusivity[l] * (eta_x_div_jac * y_x[l] + eta_y_div_jac * y_y[l] + eta_z_div_jac * y_z[l]) -
                   0.5 * (y(i, j, k, l) + y(i, j + 1, k, l)) *
                   (eta_x_div_jac * rho_uc + eta_y_div_jac * rho_vc + eta_z_div_jac * rho_wc);
+    }
+  }
+
+  if constexpr (turb_method == TurbMethod::RANS) {
+    const integer rans_model{param->rans_model};
+    const integer n_spec{zone->n_spec};
+    const integer it = zone->n_spec;
+    auto &sv = zone->sv;
+
+    switch (rans_model) {
+      case 1: // SA
+        break;
+      case 2: // SST
+      default:
+        // Default SST
+        const real k_xi =
+            0.25 * (sv(i + 1, j, k, it) - sv(i - 1, j, k, it) + sv(i + 1, j + 1, k, it) - sv(i - 1, j + 1, k, it));
+        const real k_eta = sv(i, j + 1, k, it) - sv(i, j, k, it);
+        const real k_zeta =
+            0.25 * (sv(i, j, k + 1, it) - sv(i, j, k - 1, it) + sv(i, j + 1, k + 1, it) - sv(i, j + 1, k - 1, it));
+
+        const real k_x = k_xi * xi_x + k_eta * eta_x + k_zeta * zeta_x;
+        const real k_y = k_xi * xi_y + k_eta * eta_y + k_zeta * zeta_y;
+        const real k_z = k_xi * xi_z + k_eta * eta_z + k_zeta * zeta_z;
+
+        const real omega_xi = 0.25 * (sv(i + 1, j, k, it + 1) - sv(i - 1, j, k, it + 1) + sv(i + 1, j + 1, k, it + 1) -
+                                      sv(i - 1, j + 1, k, it + 1));
+        const real omega_eta = sv(i, j + 1, k, it + 1) - sv(i, j, k, it + 1);
+        const real omega_zeta = 0.25 *
+                                (sv(i, j, k + 1, it + 1) - sv(i, j, k - 1, it + 1) + sv(i, j + 1, k + 1, it + 1) -
+                                 sv(i, j + 1, k - 1, it + 1));
+
+
+        const real omega_x = omega_xi * xi_x + omega_eta * eta_x + omega_zeta * zeta_x;
+        const real omega_y = omega_xi * xi_y + omega_eta * eta_y + omega_zeta * zeta_y;
+        const real omega_z = omega_xi * xi_z + omega_eta * eta_z + omega_zeta * zeta_z;
+
+        const real mu_l = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j + 1, k));
+
+        const real wall_dist = 0.5 * (zone->wall_distance(i, j, k) + zone->wall_distance(i, j + 1, k));
+
+        real f1{1};
+        if (wall_dist > 1e-25) {
+          const real km = 0.5 * (sv(i, j, k, it) + sv(i, j + 1, k, it));
+          const real omegam = 0.5 * (sv(i, j, k, it + 1) + sv(i, j + 1, k, it + 1));
+          const real param1{std::sqrt(km) / (0.09 * omegam * wall_dist)};
+
+          const real rhom = 0.5 * (pv(i, j, k, 0) + pv(i, j + 1, k, 0));
+          const real d2 = wall_dist * wall_dist;
+          const real param2{500 * mu_l / (rhom * d2 * omegam)};
+          const real CDkomega{max(1e-20, 2 * rhom * SST::sigma_omega2 / omegam *
+                                         (k_x * omega_x + k_y * omega_y + k_z * omega_z))};
+          const real param3{4 * rhom * SST::sigma_omega2 * km / (CDkomega * d2)};
+
+          const real arg1{min(max(param1, param2), param3)};
+          f1 = std::tanh(arg1 * arg1 * arg1 * arg1);
+        }
+
+        const real sigma_k = SST::sigma_k2 + SST::delta_sigma_k * f1;
+        const real sigma_omega = SST::sigma_omega2 + SST::delta_sigma_omega * f1;
+
+        const real mu_t = 0.5 * (zone->mut(i, j, k) + zone->mut(i, j + 1, k));
+        gv[5 + n_spec] = (mu_l + mu_t * sigma_k) * (eta_x_div_jac * k_x + eta_y_div_jac * k_y + eta_z_div_jac * k_z);
+        gv[6 + n_spec] =
+            (mu_l + mu_t * sigma_omega) * (eta_x_div_jac * omega_x + eta_y_div_jac * omega_y + eta_z_div_jac * omega_z);
     }
   }
 }
@@ -286,15 +443,28 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
   const real w_y = w_xi * xi_y + w_eta * eta_y + w_zeta * zeta_y;
   const real w_z = w_xi * xi_z + w_eta * eta_z + w_zeta * zeta_z;
 
-  const real viscosity = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j, k + 1));
+  real viscosity = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j, k + 1));
+  if constexpr (turb_method == TurbMethod::RANS) {
+    viscosity += 0.5 * (zone->mut(i, j, k) + zone->mut(i, j, k + 1));
+  }
 
   // Compute the viscous stress
-  const real tau_xx = viscosity * (4 * u_x - 2 * v_y - 2 * w_z) / 3.0;
-  const real tau_yy = viscosity * (4 * v_y - 2 * u_x - 2 * w_z) / 3.0;
-  const real tau_zz = viscosity * (4 * w_z - 2 * u_x - 2 * v_y) / 3.0;
+  real tau_xx = viscosity * (4 * u_x - 2 * v_y - 2 * w_z) / 3.0;
+  real tau_yy = viscosity * (4 * v_y - 2 * u_x - 2 * w_z) / 3.0;
+  real tau_zz = viscosity * (4 * w_z - 2 * u_x - 2 * v_y) / 3.0;
   const real tau_xy = viscosity * (u_y + v_x);
   const real tau_xz = viscosity * (u_z + w_x);
   const real tau_yz = viscosity * (v_z + w_y);
+
+  if constexpr (turb_method == TurbMethod::RANS) {
+    if (param->rans_model == 2) {
+      // SST
+      const real twoThirdrhoKm = -2 / 3 * 0.5 * (zone->cv(i, j, k, zone->n_spec) + zone->cv(i, j, k + 1, zone->n_spec));
+      tau_xx += twoThirdrhoKm;
+      tau_yy += twoThirdrhoKm;
+      tau_zz += twoThirdrhoKm;
+    }
+  }
 
   const real zeta_x_div_jac = 0.5 * (m(3, 1) * zone->jac(i, j, k) + m1(3, 1) * zone->jac(i, j, k + 1));
   const real zeta_y_div_jac = 0.5 * (m(3, 2) * zone->jac(i, j, k) + m1(3, 2) * zone->jac(i, j, k + 1));
@@ -316,7 +486,7 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
   hv[4] = um * hv[1] + vm * hv[2] + wm * hv[3] +
           conductivity * (zeta_x_div_jac * t_x + zeta_y_div_jac * t_y + zeta_z_div_jac * t_z);
 
-  if constexpr (mix_model!=MixtureModel::Air){
+  if constexpr (mix_model != MixtureModel::Air) {
     const integer n_spec{zone->n_spec};
     const auto &y = zone->sv;
 
@@ -349,6 +519,70 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
       hv[5 + l] = diffusivity[l] * (zeta_x_div_jac * y_x[l] + zeta_y_div_jac * y_y[l] + zeta_z_div_jac * y_z[l]) -
                   0.5 * (y(i, j, k, l) + y(i, j, k + 1, l)) *
                   (zeta_x_div_jac * rho_uc + zeta_y_div_jac * rho_vc + zeta_z_div_jac * rho_wc);
+    }
+  }
+
+  if constexpr (turb_method == TurbMethod::RANS) {
+    const integer rans_model{param->rans_model};
+    const integer n_spec{zone->n_spec};
+    const integer it = zone->n_spec;
+    auto &sv = zone->sv;
+
+    switch (rans_model) {
+      case 1: // SA
+        break;
+      case 2: // SST
+      default:
+        // Default SST
+        const real k_xi =
+            0.25 * (sv(i + 1, j, k, it) - sv(i - 1, j, k, it) + sv(i + 1, j, k + 1, it) - sv(i - 1, j, k + 1, it));
+        const real k_eta =
+            0.25 * (sv(i, j + 1, k, it) - sv(i, j - 1, k, it) + sv(i, j + 1, k + 1, it) - sv(i, j - 1, k + 1, it));
+        const real k_zeta = sv(i, j, k + 1, it) - sv(i, j, k, it);
+
+        const real k_x = k_xi * xi_x + k_eta * eta_x + k_zeta * zeta_x;
+        const real k_y = k_xi * xi_y + k_eta * eta_y + k_zeta * zeta_y;
+        const real k_z = k_xi * xi_z + k_eta * eta_z + k_zeta * zeta_z;
+
+        const real omega_xi = 0.25 * (sv(i + 1, j, k, it + 1) - sv(i - 1, j, k, it + 1) + sv(i + 1, j, k + 1, it + 1) -
+                                      sv(i - 1, j, k + 1, it + 1));
+        const real omega_eta = 0.25 * (sv(i, j + 1, k, it + 1) - sv(i, j - 1, k, it + 1) + sv(i, j + 1, k + 1, it + 1) -
+                                       sv(i, j - 1, k + 1, it + 1));
+        const real omega_zeta = sv(i, j, k + 1, it + 1) - sv(i, j, k, it + 1);
+
+        const real omega_x = omega_xi * xi_x + omega_eta * eta_x + omega_zeta * zeta_x;
+        const real omega_y = omega_xi * xi_y + omega_eta * eta_y + omega_zeta * zeta_y;
+        const real omega_z = omega_xi * xi_z + omega_eta * eta_z + omega_zeta * zeta_z;
+
+        const real mu_l = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j, k + 1));
+
+        const real wall_dist = 0.5 * (zone->wall_distance(i, j, k) + zone->wall_distance(i, j, k + 1));
+
+        real f1{1};
+        if (wall_dist > 1e-25) {
+          const real km = 0.5 * (sv(i, j, k, it) + sv(i, j, k + 1, it));
+          const real omegam = 0.5 * (sv(i, j, k, it + 1) + sv(i, j, k + 1, it + 1));
+          const real param1{std::sqrt(km) / (0.09 * omegam * wall_dist)};
+
+          const real rhom = 0.5 * (pv(i, j, k, 0) + pv(i, j, k + 1, 0));
+          const real d2 = wall_dist * wall_dist;
+          const real param2{500 * mu_l / (rhom * d2 * omegam)};
+          const real CDkomega{max(1e-20, 2 * rhom * SST::sigma_omega2 / omegam *
+                                         (k_x * omega_x + k_y * omega_y + k_z * omega_z))};
+          const real param3{4 * rhom * SST::sigma_omega2 * km / (CDkomega * d2)};
+
+          const real arg1{min(max(param1, param2), param3)};
+          f1 = std::tanh(arg1 * arg1 * arg1 * arg1);
+        }
+
+        const real sigma_k = SST::sigma_k2 + SST::delta_sigma_k * f1;
+        const real sigma_omega = SST::sigma_omega2 + SST::delta_sigma_omega * f1;
+
+        const real mu_t = 0.5 * (zone->mut(i, j, k) + zone->mut(i, j, k + 1));
+        hv[5 + n_spec] = (mu_l + mu_t * sigma_k) * (zeta_x_div_jac * k_x + zeta_y_div_jac * k_y + zeta_z_div_jac * k_z);
+        hv[6 + n_spec] =
+            (mu_l + mu_t * sigma_omega) *
+            (zeta_x_div_jac * omega_x + zeta_y_div_jac * omega_y + zeta_z_div_jac * omega_z);
     }
   }
 }

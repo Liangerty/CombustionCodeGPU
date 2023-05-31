@@ -154,6 +154,4 @@ __global__ void update_cv_and_bv(cfd::DZone *zone, DParameter *param) {
 }
 
 __global__ void eliminate_k_gradient(cfd::DZone *zone);
-
-
 }

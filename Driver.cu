@@ -9,6 +9,7 @@
 #include "Parallel.h"
 #include <iostream>
 #include <mpi.h>
+#include "SourceTerm.cuh"
 
 namespace cfd {
 // Instantiate all possible drivers
@@ -170,11 +171,12 @@ void Driver<mix_model, turb_method>::acquire_wall_distance() {
     cudaMalloc(&wall_corr_gpu, total_wall_number * sizeof(real));
     cudaMemcpy(wall_corr_gpu, wall_points.data(), total_wall_number * sizeof(real), cudaMemcpyHostToDevice);
     for (integer blk = 0; blk < mesh.n_block; ++blk) {
-      const integer mx{mesh[blk].mx}, my{mesh[blk].my}, mz{mesh[blk].mz};
+      const integer ngg{mesh[0].ngg};
+      const integer mx{mesh[blk].mx+2*ngg}, my{mesh[blk].my+2*ngg}, mz{mesh[blk].mz+2*ngg};
       dim3 tpb{512, 1, 1};
       dim3 bpg{(mx - 1) / tpb.x + 1, (my - 1) / tpb.y + 1, (mz - 1) / tpb.z + 1};
       compute_wall_distance<<<bpg, tpb>>>(wall_corr_gpu, field[blk].d_ptr, total_wall_number);
-      cudaMemcpy(field[blk].var_without_ghost_grid.data(), field[blk].h_ptr->wall_distance.data(), field[blk].h_ptr->wall_distance.size()*sizeof(real),cudaMemcpyDeviceToHost);
+//      cudaMemcpy(field[blk].var_without_ghost_grid.data(), field[blk].h_ptr->wall_distance.data(), field[blk].h_ptr->wall_distance.size()*sizeof(real),cudaMemcpyDeviceToHost);
     }
     if (myid==0){
       printf("Finish computing wall distance.\n");
@@ -228,6 +230,8 @@ void Driver<mix_model, turb_method>::steady_simulation() {
       cudaMemset(field[b].h_ptr->dq.data(), 0, field[b].h_ptr->dq.size() * n_var * sizeof(real));
 
       // Second, for each block, compute the residual dq
+      // First, compute the source term, because properties such as mut are updated here.
+      compute_source<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
       compute_inviscid_flux<mix_model, turb_method>(mesh[b], field[b].d_ptr, param, n_var);
       compute_viscous_flux<mix_model, turb_method>(mesh[b], field[b].d_ptr, param, n_var);
 
@@ -425,11 +429,11 @@ __global__ void reduction_of_dv_squared(real *arr, integer size) {
 }
 
 __global__ void compute_wall_distance(const real *wall_point_coor, DZone *zone, integer n_point_times3) {
-  const integer extent[3]{zone->mx, zone->my, zone->mz};
-  const integer i = blockDim.x * blockIdx.x + threadIdx.x;
-  const integer j = blockDim.y * blockIdx.y + threadIdx.y;
-  const integer k = blockDim.z * blockIdx.z + threadIdx.z;
-  if (i >= extent[0] || j >= extent[1] || k >= extent[2]) return;
+  const integer ngg{zone->ngg}, mx{zone->mx}, my{zone->my}, mz{zone->mz};
+  integer i = (integer) (blockDim.x * blockIdx.x + threadIdx.x) - ngg;
+  integer j = (integer) (blockDim.y * blockIdx.y + threadIdx.y) - ngg;
+  integer k = (integer) (blockDim.z * blockIdx.z + threadIdx.z) - ngg;
+  if (i >= mx + ngg || j >= my + ngg || k >= mz + ngg) return;
 
   const real x{zone->x(i, j, k)}, y{zone->y(i, j, k)}, z{zone->z(i, j, k)};
   const integer n_wall_point = n_point_times3 / 3;

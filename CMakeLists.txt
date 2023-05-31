@@ -31,7 +31,7 @@ list(APPEND src_file
   main.cu Mesh.h Mesh.cpp
   Output.hpp
   Parallel.h Parallel.cpp Parameter.h Parameter.cpp
-  Reconstruction.cu Reconstruction.cuh SchemeSelector.cuh
+  Reconstruction.cu Reconstruction.cuh SchemeSelector.cuh SourceTerm.cuh
   Transport.cuh Transport.cu TimeAdvanceFunc.cu TimeAdvanceFunc.cuh Thermo.cuh Thermo.cu
   ViscousScheme.cuh
 
@@ -62,6 +62,11 @@ target_include_directories(2_CLionGPU
   PUBLIC
   ${CMAKE_SOURCE_DIR}/depends/include/
   )
+
+# target_compile_options(2_CLionGPU
+#   PUBLIC
+#     "$<$<COMPILE_LANGUAGE:CUDA>: --expt-relaxed-constexpr>"
+#   )
 
 target_link_directories(2_CLionGPU
   PUBLIC#PRIVATE
