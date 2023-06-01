@@ -465,7 +465,6 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
   }
   const real p{bv(idx[0], idx[1], idx[2], 4)};
 
-  real rho_wall{0};
   real mw{cfd::mw_air};
   if constexpr (mix_model != MixtureModel::Air) {
     // Mixture
@@ -478,7 +477,7 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
     mw = 1 / mw;
   }
 
-  rho_wall = p * mw / (t_wall * cfd::R_u);
+  const real rho_wall = p * mw / (t_wall * cfd::R_u);
   bv(i, j, k, 0) = rho_wall;
   bv(i, j, k, 1) = 0;
   bv(i, j, k, 2) = 0;

@@ -59,27 +59,28 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
         const integer n_spec{zone->n_spec};
         const real density = zone->bv(i, j, k, 0);
         const real omega = zone->sv(i, j, k, n_spec + 1);
-        auto& sv = zone->sv;
+        auto &sv = zone->sv;
         const real k_x = 0.5 * (xi_x * (sv(i + 1, j, k, n_spec) - sv(i - 1, j, k, n_spec)) +
-          eta_x * (sv(i, j + 1, k, n_spec) - sv(i, j - 1, k, n_spec)) +
-          zeta_x * (sv(i, j, k + 1, n_spec) - sv(i, j, k - 1, n_spec)));
+                                eta_x * (sv(i, j + 1, k, n_spec) - sv(i, j - 1, k, n_spec)) +
+                                zeta_x * (sv(i, j, k + 1, n_spec) - sv(i, j, k - 1, n_spec)));
         const real k_y = 0.5 * (xi_y * (sv(i + 1, j, k, n_spec) - sv(i - 1, j, k, n_spec)) +
-          eta_y * (sv(i, j + 1, k, n_spec) - sv(i, j - 1, k, n_spec)) +
-          zeta_y * (sv(i, j, k + 1, n_spec) - sv(i, j, k - 1, n_spec)));
+                                eta_y * (sv(i, j + 1, k, n_spec) - sv(i, j - 1, k, n_spec)) +
+                                zeta_y * (sv(i, j, k + 1, n_spec) - sv(i, j, k - 1, n_spec)));
         const real k_z = 0.5 * (xi_z * (sv(i + 1, j, k, n_spec) - sv(i - 1, j, k, n_spec)) +
-          eta_z * (sv(i, j + 1, k, n_spec) - sv(i, j - 1, k, n_spec)) +
-          zeta_z * (sv(i, j, k + 1, n_spec) - sv(i, j, k - 1, n_spec)));
+                                eta_z * (sv(i, j + 1, k, n_spec) - sv(i, j - 1, k, n_spec)) +
+                                zeta_z * (sv(i, j, k + 1, n_spec) - sv(i, j, k - 1, n_spec)));
 
         const real omega_x = 0.5 * (xi_x * (sv(i + 1, j, k, n_spec + 1) - sv(i - 1, j, k, n_spec + 1)) +
-          eta_x * (sv(i, j + 1, k, n_spec + 1) - sv(i, j - 1, k, n_spec + 1)) +
-          zeta_x * (sv(i, j, k + 1, n_spec + 1) - sv(i, j, k - 1, n_spec + 1)));
+                                    eta_x * (sv(i, j + 1, k, n_spec + 1) - sv(i, j - 1, k, n_spec + 1)) +
+                                    zeta_x * (sv(i, j, k + 1, n_spec + 1) - sv(i, j, k - 1, n_spec + 1)));
         const real omega_y = 0.5 * (xi_y * (sv(i + 1, j, k, n_spec + 1) - sv(i - 1, j, k, n_spec + 1)) +
-          eta_y * (sv(i, j + 1, k, n_spec + 1) - sv(i, j - 1, k, n_spec + 1)) +
-          zeta_y * (sv(i, j, k + 1, n_spec + 1) - sv(i, j, k - 1, n_spec + 1)));
+                                    eta_y * (sv(i, j + 1, k, n_spec + 1) - sv(i, j - 1, k, n_spec + 1)) +
+                                    zeta_y * (sv(i, j, k + 1, n_spec + 1) - sv(i, j, k - 1, n_spec + 1)));
         const real omega_z = 0.5 * (xi_z * (sv(i + 1, j, k, n_spec + 1) - sv(i - 1, j, k, n_spec + 1)) +
-          eta_z * (sv(i, j + 1, k, n_spec + 1) - sv(i, j - 1, k, n_spec + 1)) +
-          zeta_z * (sv(i, j, k + 1, n_spec + 1) - sv(i, j, k - 1, n_spec + 1)));
-        const real inter_var = 2 * density * cfd::SST::sigma_omega2 / omega * (k_x * omega_x + k_y * omega_y + k_z * omega_z);
+                                    eta_z * (sv(i, j + 1, k, n_spec + 1) - sv(i, j - 1, k, n_spec + 1)) +
+                                    zeta_z * (sv(i, j, k + 1, n_spec + 1) - sv(i, j, k - 1, n_spec + 1)));
+        const real inter_var =
+            2 * density * cfd::SST::sigma_omega2 / omega * (k_x * omega_x + k_y * omega_y + k_z * omega_z);
 
         // First, compute the turbulent viscosity.
         // Theoretically, this should be computed after updating the basic variables, but after that we won't need it until now.
@@ -97,7 +98,7 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
 
           const real d2 = dy * dy;
           const real param2{500 * zone->mul(i, j, k) / (density * d2 * omega)};
-          const real arg2 = max(2*param1, param2);
+          const real arg2 = max(2 * param1, param2);
           f2 = std::tanh(arg2 * arg2);
 
           const real CDkomega{max(1e-20, inter_var)};
@@ -111,8 +112,11 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
           mut = SST::a_1 * rhoK / denominator;
         }
         zone->mut(i, j, k) = mut;
-        if constexpr (mix_model!=MixtureModel::Air){
-          zone->turb_therm_cond(i,j,k)=mut*zone->cp(i,j,k)/param->Prt;
+        if constexpr (mix_model != MixtureModel::Air) {
+          zone->turb_therm_cond(i, j, k) = mut * zone->cp(i, j, k) / param->Prt;
+        } else {
+          constexpr real cp{gamma_air * R_u / mw_air / (gamma_air - 1)};
+          zone->turb_therm_cond(i, j, k) = mut * cp / param->Prt;
         }
 
         // Next, compute the source term for turbulent kinetic energy.
@@ -143,11 +147,11 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
         //  f1 = std::tanh(arg1 * arg1 * arg1 * arg1);
         //}
 
-        const real gamma=SST::gamma2+SST::delta_gamma*f1;
-        const real prod_omega = gamma * density / mut * prod_k + (1 - f1)*inter_var;
-        const real beta=SST::beta_2+SST::delta_beta*f1;
-        const real diss_omega=beta*density*omega*omega;
-        dq(i,j,k,n_spec+6)+=jac*(prod_omega-diss_omega);
+        const real gamma = SST::gamma2 + SST::delta_gamma * f1;
+        const real prod_omega = gamma * density / mut * prod_k + (1 - f1) * inter_var;
+        const real beta = SST::beta_2 + SST::delta_beta * f1;
+        const real diss_omega = beta * density * omega * omega;
+        dq(i, j, k, n_spec + 6) += jac * (prod_omega - diss_omega);
     }
   }
 }
