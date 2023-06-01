@@ -32,13 +32,15 @@ struct DZone {
   ggxl::Array3D<real> acoustic_speed;
   ggxl::Array3D<real> mach;     // Mach number
   ggxl::Array3D<real> mul;      // Dynamic viscosity
-  ggxl::Array3D<real> conductivity;      // Dynamic viscosity
+  ggxl::Array3D<real> thermal_conductivity;      // Thermal conductivity
 
   // Mixture variables
   ggxl::VectorField3D<real> rho_D; // the mass diffusivity of species
   ggxl::Array3D<real> gamma;  // specific heat ratio
+  ggxl::Array3D<real> cp;   // specific heat for constant pressure
   // Turbulent variables
   ggxl::Array3D<real> mut;  // turbulent viscosity
+  ggxl::Array3D<real> turb_therm_cond; // turbulent thermal conductivity
   // Flamelet variables
   ggxl::Array3D<real> scalar_diss_rate;  // scalar dissipation rate
 

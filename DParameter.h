@@ -31,5 +31,7 @@ struct DParameter {
   ggxl::MatrixDyn<real> WjDivWi_to_One4th;
   ggxl::MatrixDyn<real> sqrt_WiDivWjPl1Mul8;
   real Sc=0.9;
+  real Prt=0.9;
+  real Sct=0.9;
 };
 }

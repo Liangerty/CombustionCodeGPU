@@ -70,7 +70,7 @@ cfd::compute_transport_property(integer i, integer j, integer k, real temperatur
     conductivity += lambda * X[m] / cond_temp;
   }
   zone->mul(i, j, k) = viscosity;
-  zone->conductivity(i, j, k) = conductivity;
+  zone->thermal_conductivity(i, j, k) = conductivity;
 
   // The diffusivity is now computed via constant Schmidt number method
   const real sc{param->Sc};

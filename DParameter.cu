@@ -16,7 +16,9 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter,Species& species, Reaction
                                                                               /*output_screen(
                                                                                   parameter.get_int("output_screen")),*/
                                                                               Pr(parameter.get_real("prandtl_number")),
-                                                                              cfl(parameter.get_real("cfl")) {
+                                                                              cfl(parameter.get_real("cfl")),
+                                                                              Prt(parameter.get_real("turbulent_prandtl_number")),
+                                                                              Sct(parameter.get_real("turbulent_schmidt_number")) {
   const auto &spec = species;
   n_spec = spec.n_spec;
   auto mem_sz = n_spec * sizeof(real);

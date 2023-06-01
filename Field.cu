@@ -121,7 +121,7 @@ void cfd::Field<mix_model, turb_method>::setup_device_memory(const Parameter &pa
   h_ptr->acoustic_speed.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
   h_ptr->mach.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
   h_ptr->mul.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
-  h_ptr->conductivity.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
+  h_ptr->thermal_conductivity.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
 
   h_ptr->n_spec = parameter.get_int("n_spec");
   h_ptr->n_scal = parameter.get_int("n_scalar");
@@ -130,9 +130,11 @@ void cfd::Field<mix_model, turb_method>::setup_device_memory(const Parameter &pa
   h_ptr->rho_D.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_spec, h_ptr->ngg);
   if (h_ptr->n_spec > 0) {
     h_ptr->gamma.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
+    h_ptr->cp.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
   }
   if constexpr (turb_method == TurbMethod::RANS) {
     h_ptr->mut.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
+    h_ptr->turb_therm_cond.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
     if (parameter.get_int("RANS_model") == 2) {
       // SST
       h_ptr->wall_distance.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);

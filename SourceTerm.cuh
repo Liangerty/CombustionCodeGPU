@@ -111,6 +111,9 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
           mut = SST::a_1 * rhoK / denominator;
         }
         zone->mut(i, j, k) = mut;
+        if constexpr (mix_model!=MixtureModel::Air){
+          zone->turb_therm_cond(i,j,k)=mut*zone->cp(i,j,k)/param->Prt;
+        }
 
         // Next, compute the source term for turbulent kinetic energy.
         const real divU = u_x + v_y + w_z;

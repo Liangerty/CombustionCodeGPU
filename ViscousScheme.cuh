@@ -65,10 +65,12 @@ __device__ void compute_fv_2nd_order(const integer idx[3], DZone *zone, real *fv
   const real w_y = w_xi * xi_y + w_eta * eta_y + w_zeta * zeta_y;
   const real w_z = w_xi * xi_z + w_eta * eta_z + w_zeta * zeta_z;
 
-  real viscosity = 0.5 * (zone->mul(i, j, k) + zone->mul(i + 1, j, k));
+  const real mul = 0.5 * (zone->mul(i, j, k) + zone->mul(i + 1, j, k));
+  real mut{0};
   if constexpr (turb_method == TurbMethod::RANS) {
-    viscosity += 0.5 * (zone->mut(i, j, k) + zone->mut(i + 1, j, k));
+    mut = 0.5 * (zone->mut(i, j, k) + zone->mut(i + 1, j, k));
   }
+  const real viscosity = mul + mut;
 
   // Compute the viscous stress
   real tau_xx = viscosity * (4 * u_x - 2 * v_y - 2 * w_z) / 3.0;
@@ -102,7 +104,10 @@ __device__ void compute_fv_2nd_order(const integer idx[3], DZone *zone, real *fv
   const real t_x = t_xi * xi_x + t_eta * eta_x + t_zeta * zeta_x;
   const real t_y = t_xi * xi_y + t_eta * eta_y + t_zeta * zeta_y;
   const real t_z = t_xi * xi_z + t_eta * eta_z + t_zeta * zeta_z;
-  const real conductivity = 0.5 * (zone->conductivity(i, j, k) + zone->conductivity(i + 1, j, k));
+  real conductivity = 0.5 * (zone->thermal_conductivity(i, j, k) + zone->thermal_conductivity(i + 1, j, k));
+  if constexpr (turb_method == TurbMethod::RANS) {
+    conductivity += 0.5 * (zone->turb_therm_cond(i, j, k) + zone->turb_therm_cond(i + 1, j, k));
+  }
 
   fv[4] = um * fv[1] + vm * fv[2] + wm * fv[3] +
           conductivity * (xi_x_div_jac * t_x + xi_y_div_jac * t_y + xi_z_div_jac * t_z);
@@ -111,12 +116,17 @@ __device__ void compute_fv_2nd_order(const integer idx[3], DZone *zone, real *fv
     const integer n_spec{zone->n_spec};
     const auto &y = zone->sv;
 
+    real turb_diffusivity{0};
+    if constexpr (turb_method == TurbMethod::RANS) {
+      turb_diffusivity = mut / param->Sct;
+    }
+
     real h[MAX_SPEC_NUMBER], diffusivity[MAX_SPEC_NUMBER], y_x[MAX_SPEC_NUMBER], y_y[MAX_SPEC_NUMBER], y_z[MAX_SPEC_NUMBER];
     const real tm = 0.5 * (pv(i, j, k, 5) + pv(i + 1, j, k, 5));
     compute_enthalpy(tm, h, param);
     real rho_uc{0}, rho_vc{0}, rho_wc{0};
     for (int l = 0; l < n_spec; ++l) {
-      diffusivity[l] = 0.5 * (zone->rho_D(i, j, k, l) + zone->rho_D(i + 1, j, k, l));
+      diffusivity[l] = 0.5 * (zone->rho_D(i, j, k, l) + zone->rho_D(i + 1, j, k, l)) + turb_diffusivity;
 
       const real y_xi = y(i + 1, j, k, l) - y(i, j, k, l);
       const real y_eta = 0.25 * (y(i, j + 1, k, l) - y(i, j - 1, k, l) + y(i + 1, j + 1, k, l) - y(i + 1, j - 1, k, l));
@@ -177,8 +187,6 @@ __device__ void compute_fv_2nd_order(const integer idx[3], DZone *zone, real *fv
         const real omega_y = omega_xi * xi_y + omega_eta * eta_y + omega_zeta * zeta_y;
         const real omega_z = omega_xi * xi_z + omega_eta * eta_z + omega_zeta * zeta_z;
 
-        const real mu_l = 0.5 * (zone->mul(i, j, k) + zone->mul(i + 1, j, k));
-
         const real wall_dist = 0.5 * (zone->wall_distance(i, j, k) + zone->wall_distance(i + 1, j, k));
 
         real f1{1};
@@ -189,7 +197,7 @@ __device__ void compute_fv_2nd_order(const integer idx[3], DZone *zone, real *fv
 
           const real rhom = 0.5 * (pv(i, j, k, 0) + pv(i + 1, j, k, 0));
           const real d2 = wall_dist * wall_dist;
-          const real param2{500 * mu_l / (rhom * d2 * omegam)};
+          const real param2{500 * mul / (rhom * d2 * omegam)};
           const real CDkomega{max(1e-20, 2 * rhom * cfd::SST::sigma_omega2 / omegam *
                                          (k_x * omega_x + k_y * omega_y + k_z * omega_z))};
           const real param3{4 * rhom * SST::sigma_omega2 * km / (CDkomega * d2)};
@@ -201,10 +209,9 @@ __device__ void compute_fv_2nd_order(const integer idx[3], DZone *zone, real *fv
         const real sigma_k = SST::sigma_k2 + SST::delta_sigma_k * f1;
         const real sigma_omega = SST::sigma_omega2 + SST::delta_sigma_omega * f1;
 
-        const real mu_t = 0.5 * (zone->mut(i, j, k) + zone->mut(i + 1, j, k));
-        fv[5 + n_spec] = (mu_l + mu_t * sigma_k) * (xi_x_div_jac * k_x + xi_y_div_jac * k_y + xi_z_div_jac * k_z);
+        fv[5 + n_spec] = (mul + mut * sigma_k) * (xi_x_div_jac * k_x + xi_y_div_jac * k_y + xi_z_div_jac * k_z);
         fv[6 + n_spec] =
-            (mu_l + mu_t * sigma_omega) * (xi_x_div_jac * omega_x + xi_y_div_jac * omega_y + xi_z_div_jac * omega_z);
+            (mul + mut * sigma_omega) * (xi_x_div_jac * omega_x + xi_y_div_jac * omega_y + xi_z_div_jac * omega_z);
     }
   }
 }
@@ -255,10 +262,12 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
   const real w_y = w_xi * xi_y + w_eta * eta_y + w_zeta * zeta_y;
   const real w_z = w_xi * xi_z + w_eta * eta_z + w_zeta * zeta_z;
 
-  real viscosity = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j + 1, k));
+  const real mul = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j + 1, k));
+  real mut{0};
   if constexpr (turb_method == TurbMethod::RANS) {
-    viscosity += 0.5 * (zone->mut(i, j, k) + zone->mut(i, j + 1, k));
+    mut = 0.5 * (zone->mut(i, j, k) + zone->mut(i, j + 1, k));
   }
+  const real viscosity = mul + mut;
 
   // Compute the viscous stress
   real tau_xx = viscosity * (4 * u_x - 2 * v_y - 2 * w_z) / 3.0;
@@ -293,7 +302,10 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
   const real t_x = t_xi * xi_x + t_eta * eta_x + t_zeta * zeta_x;
   const real t_y = t_xi * xi_y + t_eta * eta_y + t_zeta * zeta_y;
   const real t_z = t_xi * xi_z + t_eta * eta_z + t_zeta * zeta_z;
-  const real conductivity = 0.5 * (zone->conductivity(i, j, k) + zone->conductivity(i, j + 1, k));
+  real conductivity = 0.5 * (zone->thermal_conductivity(i, j, k) + zone->thermal_conductivity(i, j + 1, k));
+  if constexpr (turb_method == TurbMethod::RANS) {
+    conductivity += 0.5 * (zone->turb_therm_cond(i, j, k) + zone->turb_therm_cond(i, j + 1, k));
+  }
 
   gv[4] = um * gv[1] + vm * gv[2] + wm * gv[3] +
           conductivity * (eta_x_div_jac * t_x + eta_y_div_jac * t_y + eta_z_div_jac * t_z);
@@ -302,12 +314,17 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
     const integer n_spec{zone->n_spec};
     const auto &y = zone->sv;
 
+    real turb_diffusivity{0};
+    if constexpr (turb_method == TurbMethod::RANS) {
+      turb_diffusivity = mut / param->Sct;
+    }
+
     real h[MAX_SPEC_NUMBER], diffusivity[MAX_SPEC_NUMBER], y_x[MAX_SPEC_NUMBER], y_y[MAX_SPEC_NUMBER], y_z[MAX_SPEC_NUMBER];
     const real tm = 0.5 * (pv(i, j, k, 5) + pv(i, j + 1, k, 5));
     compute_enthalpy(tm, h, param);
     real rho_uc{0}, rho_vc{0}, rho_wc{0};
     for (int l = 0; l < n_spec; ++l) {
-      diffusivity[l] = 0.5 * (zone->rho_D(i, j, k, l) + zone->rho_D(i, j + 1, k, l));
+      diffusivity[l] = 0.5 * (zone->rho_D(i, j, k, l) + zone->rho_D(i, j + 1, k, l)) + turb_diffusivity;
 
       const real y_xi = 0.25 * (y(i + 1, j, k, l) - y(i - 1, j, k, l) + y(i + 1, j + 1, k, l) - y(i - 1, j + 1, k, l));
       const real y_eta = y(i, j + 1, k, l) - y(i, j, k, l);
@@ -364,12 +381,9 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
                                 (sv(i, j, k + 1, it + 1) - sv(i, j, k - 1, it + 1) + sv(i, j + 1, k + 1, it + 1) -
                                  sv(i, j + 1, k - 1, it + 1));
 
-
         const real omega_x = omega_xi * xi_x + omega_eta * eta_x + omega_zeta * zeta_x;
         const real omega_y = omega_xi * xi_y + omega_eta * eta_y + omega_zeta * zeta_y;
         const real omega_z = omega_xi * xi_z + omega_eta * eta_z + omega_zeta * zeta_z;
-
-        const real mu_l = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j + 1, k));
 
         const real wall_dist = 0.5 * (zone->wall_distance(i, j, k) + zone->wall_distance(i, j + 1, k));
 
@@ -381,7 +395,7 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
 
           const real rhom = 0.5 * (pv(i, j, k, 0) + pv(i, j + 1, k, 0));
           const real d2 = wall_dist * wall_dist;
-          const real param2{500 * mu_l / (rhom * d2 * omegam)};
+          const real param2{500 * mul / (rhom * d2 * omegam)};
           const real CDkomega{max(1e-20, 2 * rhom * SST::sigma_omega2 / omegam *
                                          (k_x * omega_x + k_y * omega_y + k_z * omega_z))};
           const real param3{4 * rhom * SST::sigma_omega2 * km / (CDkomega * d2)};
@@ -393,10 +407,9 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
         const real sigma_k = SST::sigma_k2 + SST::delta_sigma_k * f1;
         const real sigma_omega = SST::sigma_omega2 + SST::delta_sigma_omega * f1;
 
-        const real mu_t = 0.5 * (zone->mut(i, j, k) + zone->mut(i, j + 1, k));
-        gv[5 + n_spec] = (mu_l + mu_t * sigma_k) * (eta_x_div_jac * k_x + eta_y_div_jac * k_y + eta_z_div_jac * k_z);
+        gv[5 + n_spec] = (mul + mut * sigma_k) * (eta_x_div_jac * k_x + eta_y_div_jac * k_y + eta_z_div_jac * k_z);
         gv[6 + n_spec] =
-            (mu_l + mu_t * sigma_omega) * (eta_x_div_jac * omega_x + eta_y_div_jac * omega_y + eta_z_div_jac * omega_z);
+            (mul + mut * sigma_omega) * (eta_x_div_jac * omega_x + eta_y_div_jac * omega_y + eta_z_div_jac * omega_z);
     }
   }
 }
@@ -443,10 +456,12 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
   const real w_y = w_xi * xi_y + w_eta * eta_y + w_zeta * zeta_y;
   const real w_z = w_xi * xi_z + w_eta * eta_z + w_zeta * zeta_z;
 
-  real viscosity = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j, k + 1));
+  const real mul = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j, k + 1));
+  real mut{0};
   if constexpr (turb_method == TurbMethod::RANS) {
-    viscosity += 0.5 * (zone->mut(i, j, k) + zone->mut(i, j, k + 1));
+    mut = 0.5 * (zone->mut(i, j, k) + zone->mut(i, j, k + 1));
   }
+  const real viscosity = mul + mut;
 
   // Compute the viscous stress
   real tau_xx = viscosity * (4 * u_x - 2 * v_y - 2 * w_z) / 3.0;
@@ -481,7 +496,10 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
   const real t_x = t_xi * xi_x + t_eta * eta_x + t_zeta * zeta_x;
   const real t_y = t_xi * xi_y + t_eta * eta_y + t_zeta * zeta_y;
   const real t_z = t_xi * xi_z + t_eta * eta_z + t_zeta * zeta_z;
-  const real conductivity = 0.5 * (zone->conductivity(i, j, k) + zone->conductivity(i, j, k + 1));
+  real conductivity = 0.5 * (zone->thermal_conductivity(i, j, k) + zone->thermal_conductivity(i, j, k + 1));
+  if constexpr (turb_method == TurbMethod::RANS) {
+    conductivity += 0.5 * (zone->turb_therm_cond(i, j, k) + zone->turb_therm_cond(i, j, k + 1));
+  }
 
   hv[4] = um * hv[1] + vm * hv[2] + wm * hv[3] +
           conductivity * (zeta_x_div_jac * t_x + zeta_y_div_jac * t_y + zeta_z_div_jac * t_z);
@@ -490,12 +508,17 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
     const integer n_spec{zone->n_spec};
     const auto &y = zone->sv;
 
+    real turb_diffusivity{0};
+    if constexpr (turb_method == TurbMethod::RANS) {
+      turb_diffusivity = mut / param->Sct;
+    }
+
     real h[MAX_SPEC_NUMBER], diffusivity[MAX_SPEC_NUMBER], y_x[MAX_SPEC_NUMBER], y_y[MAX_SPEC_NUMBER], y_z[MAX_SPEC_NUMBER];
     const real tm = 0.5 * (pv(i, j, k, 5) + pv(i, j, k + 1, 5));
     compute_enthalpy(tm, h, param);
     real rho_uc{0}, rho_vc{0}, rho_wc{0};
     for (int l = 0; l < n_spec; ++l) {
-      diffusivity[l] = 0.5 * (zone->rho_D(i, j, k, l) + zone->rho_D(i, j + 1, k, l));
+      diffusivity[l] = 0.5 * (zone->rho_D(i, j, k, l) + zone->rho_D(i, j, k + 1, l)) + turb_diffusivity;
 
       const real y_xi = 0.25 * (y(i + 1, j, k, l) - y(i - 1, j, k, l) + y(i + 1, j, k + 1, l) - y(i - 1, j, k + 1, l));
       const real y_eta = 0.25 * (y(i, j + 1, k, l) - y(i, j - 1, k, l) + y(i, j + 1, k + 1, l) - y(i, j - 1, k + 1, l));
@@ -554,8 +577,6 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
         const real omega_y = omega_xi * xi_y + omega_eta * eta_y + omega_zeta * zeta_y;
         const real omega_z = omega_xi * xi_z + omega_eta * eta_z + omega_zeta * zeta_z;
 
-        const real mu_l = 0.5 * (zone->mul(i, j, k) + zone->mul(i, j, k + 1));
-
         const real wall_dist = 0.5 * (zone->wall_distance(i, j, k) + zone->wall_distance(i, j, k + 1));
 
         real f1{1};
@@ -566,7 +587,7 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
 
           const real rhom = 0.5 * (pv(i, j, k, 0) + pv(i, j, k + 1, 0));
           const real d2 = wall_dist * wall_dist;
-          const real param2{500 * mu_l / (rhom * d2 * omegam)};
+          const real param2{500 * mul / (rhom * d2 * omegam)};
           const real CDkomega{max(1e-20, 2 * rhom * SST::sigma_omega2 / omegam *
                                          (k_x * omega_x + k_y * omega_y + k_z * omega_z))};
           const real param3{4 * rhom * SST::sigma_omega2 * km / (CDkomega * d2)};
@@ -578,10 +599,9 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
         const real sigma_k = SST::sigma_k2 + SST::delta_sigma_k * f1;
         const real sigma_omega = SST::sigma_omega2 + SST::delta_sigma_omega * f1;
 
-        const real mu_t = 0.5 * (zone->mut(i, j, k) + zone->mut(i, j, k + 1));
-        hv[5 + n_spec] = (mu_l + mu_t * sigma_k) * (zeta_x_div_jac * k_x + zeta_y_div_jac * k_y + zeta_z_div_jac * k_z);
+        hv[5 + n_spec] = (mul + mut * sigma_k) * (zeta_x_div_jac * k_x + zeta_y_div_jac * k_y + zeta_z_div_jac * k_z);
         hv[6 + n_spec] =
-            (mu_l + mu_t * sigma_omega) *
+            (mul + mut * sigma_omega) *
             (zeta_x_div_jac * omega_x + zeta_y_div_jac * omega_y + zeta_z_div_jac * omega_z);
     }
   }
