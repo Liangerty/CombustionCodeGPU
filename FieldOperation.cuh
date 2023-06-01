@@ -73,11 +73,16 @@ __global__ void compute_cv_from_bv(DZone *zone, DParameter *param) {
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 __global__ void update_physical_properties(DZone *zone, DParameter *param) {
-  const integer ngg{zone->ngg}, mx{zone->mx}, my{zone->my}, mz{zone->mz};
-  integer i = (integer) (blockDim.x * blockIdx.x + threadIdx.x) - ngg;
-  integer j = (integer) (blockDim.y * blockIdx.y + threadIdx.y) - ngg;
-  integer k = (integer) (blockDim.z * blockIdx.z + threadIdx.z) - ngg;
-  if (i >= mx + ngg || j >= my + ngg || k >= mz + ngg) return;
+  const integer mx{zone->mx}, my{zone->my}, mz{zone->mz};
+  integer i = (integer) (blockDim.x * blockIdx.x + threadIdx.x) - 1;
+  integer j = (integer) (blockDim.y * blockIdx.y + threadIdx.y) - 1;
+  integer k = (integer) (blockDim.z * blockIdx.z + threadIdx.z) - 1;
+  if (i >= mx + 1 || j >= my + 1 || k >= mz + 1) return;
+//  const integer ngg{zone->ngg}, mx{zone->mx}, my{zone->my}, mz{zone->mz};
+//  integer i = (integer) (blockDim.x * blockIdx.x + threadIdx.x) - ngg;
+//  integer j = (integer) (blockDim.y * blockIdx.y + threadIdx.y) - ngg;
+//  integer k = (integer) (blockDim.z * blockIdx.z + threadIdx.z) - ngg;
+//  if (i >= mx + ngg || j >= my + ngg || k >= mz + ngg) return;
 
   const real temperature{zone->bv(i, j, k, 5)};
   if constexpr (mix_model != MixtureModel::Air) {
@@ -105,6 +110,69 @@ __global__ void update_physical_properties(DZone *zone, DParameter *param) {
     zone->thermal_conductivity(i, j, k) = zone->mul(i, j, k) * cp / pr;
   }
   zone->mach(i, j, k) = zone->vel(i, j, k) / zone->acoustic_speed(i, j, k);
+
+  if constexpr (turb_method == TurbMethod::RANS){
+    switch (param->rans_model) {
+      case 1://SA
+        break;
+      case 2:
+      default: // SST
+        const auto &m = zone->metric(i, j, k);
+        const real xi_x{m(1, 1)}, xi_y{m(1, 2)}, xi_z{m(1, 3)};
+        const real eta_x{m(2, 1)}, eta_y{m(2, 2)}, eta_z{m(2, 3)};
+        const real zeta_x{m(3, 1)}, zeta_y{m(3, 2)}, zeta_z{m(3, 3)};
+
+        // Compute the gradient of velocity
+        const auto &bv = zone->bv;
+        const real u_y = 0.5 * (xi_y * (bv(i + 1, j, k, 1) - bv(i - 1, j, k, 1)) +
+                                eta_y * (bv(i, j + 1, k, 1) - bv(i, j - 1, k, 1)) +
+                                zeta_y * (bv(i, j, k + 1, 1) - bv(i, j, k - 1, 1)));
+        const real u_z = 0.5 * (xi_z * (bv(i + 1, j, k, 1) - bv(i - 1, j, k, 1)) +
+                                eta_z * (bv(i, j + 1, k, 1) - bv(i, j - 1, k, 1)) +
+                                zeta_z * (bv(i, j, k + 1, 1) - bv(i, j, k - 1, 1)));
+        const real v_x = 0.5 * (xi_x * (bv(i + 1, j, k, 2) - bv(i - 1, j, k, 2)) +
+                                eta_x * (bv(i, j + 1, k, 2) - bv(i, j - 1, k, 2)) +
+                                zeta_x * (bv(i, j, k + 1, 2) - bv(i, j, k - 1, 2)));
+        const real v_z = 0.5 * (xi_z * (bv(i + 1, j, k, 2) - bv(i - 1, j, k, 2)) +
+                                eta_z * (bv(i, j + 1, k, 2) - bv(i, j - 1, k, 2)) +
+                                zeta_z * (bv(i, j, k + 1, 2) - bv(i, j, k - 1, 2)));
+        const real w_x = 0.5 * (xi_x * (bv(i + 1, j, k, 3) - bv(i - 1, j, k, 3)) +
+                                eta_x * (bv(i, j + 1, k, 3) - bv(i, j - 1, k, 3)) +
+                                zeta_x * (bv(i, j, k + 1, 3) - bv(i, j, k - 1, 3)));
+        const real w_y = 0.5 * (xi_y * (bv(i + 1, j, k, 3) - bv(i - 1, j, k, 3)) +
+                                eta_y * (bv(i, j + 1, k, 3) - bv(i, j - 1, k, 3)) +
+                                zeta_y * (bv(i, j, k + 1, 3) - bv(i, j, k - 1, 3)));
+        const integer n_spec{zone->n_spec};
+        const real density = zone->bv(i, j, k, 0);
+        const real omega = zone->sv(i, j, k, n_spec + 1);
+
+        // First, compute the turbulent viscosity.
+        const real rhoK = zone->cv(i, j, k, n_spec + 5);
+        const real tke = zone->sv(i, j, k, n_spec);
+        const real vorticity = std::sqrt((v_x - u_y) * (v_x - u_y) + (w_x - u_z) * (w_x - u_z) + (w_y - v_z) * (w_y - v_z));
+
+        // If wall, mut=0. Else, compute mut as in the if statement.
+        real f2{1};
+        const real dy = zone->wall_distance(i, j, k);
+        if (dy > 1e-25) {
+          const real param1{2 * std::sqrt(tke) / (0.09 * omega * dy)};
+          const real param2{500 * zone->mul(i, j, k) / (density * dy * dy * omega)};
+          const real arg2 = max(param1, param2);
+          f2 = std::tanh(arg2 * arg2);
+        }
+        real mut{0};
+        if (const real denominator = max(SST::a_1 * omega, vorticity * f2); denominator > 1e-25) {
+          mut = SST::a_1 * rhoK / denominator;
+        }
+        zone->mut(i, j, k) = mut;
+        if constexpr (mix_model != MixtureModel::Air) {
+          zone->turb_therm_cond(i, j, k) = mut * zone->cp(i, j, k) / param->Prt;
+        } else {
+          constexpr real cp{gamma_air * R_u / mw_air / (gamma_air - 1)};
+          zone->turb_therm_cond(i, j, k) = mut * cp / param->Prt;
+        }
+    }
+  }
 }
 
 template<MixtureModel mix_model>

@@ -88,18 +88,18 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
         // In order to alleviate the computational burden, we put the computation of mut here.
         const real rhoK = zone->cv(i, j, k, n_spec + 5);
         const real tke = zone->sv(i, j, k, n_spec);
-        const real vorticity = std::sqrt((v_x - u_y) * (v_x - u_y) + (w_x - u_z) * (w_x - u_z) + (w_y - v_z) * (w_y - v_z));
+//        const real vorticity = std::sqrt((v_x - u_y) * (v_x - u_y) + (w_x - u_z) * (w_x - u_z) + (w_y - v_z) * (w_y - v_z));
 
         // If wall, mut=0. Else, compute mut as in the if statement.
-        real f1{1}, f2{1};
+        real f1{1};//, f2{1};
         const real dy = zone->wall_distance(i, j, k);
         if (dy > 1e-25) {
           const real param1{std::sqrt(tke) / (0.09 * omega * dy)};
 
           const real d2 = dy * dy;
           const real param2{500 * zone->mul(i, j, k) / (density * d2 * omega)};
-          const real arg2 = max(2 * param1, param2);
-          f2 = std::tanh(arg2 * arg2);
+//          const real arg2 = max(2 * param1, param2);
+//          f2 = std::tanh(arg2 * arg2);
 
           const real CDkomega{max(1e-20, inter_var)};
           const real param3{4 * density * SST::sigma_omega2 * tke / (CDkomega * d2)};
@@ -107,17 +107,18 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
           const real arg1{min(max(param1, param2), param3)};
           f1 = std::tanh(arg1 * arg1 * arg1 * arg1);
         }
-        real mut{0};
-        if (const real denominator = max(SST::a_1 * omega, vorticity * f2); denominator > 1e-25) {
-          mut = SST::a_1 * rhoK / denominator;
-        }
-        zone->mut(i, j, k) = mut;
-        if constexpr (mix_model != MixtureModel::Air) {
-          zone->turb_therm_cond(i, j, k) = mut * zone->cp(i, j, k) / param->Prt;
-        } else {
-          constexpr real cp{gamma_air * R_u / mw_air / (gamma_air - 1)};
-          zone->turb_therm_cond(i, j, k) = mut * cp / param->Prt;
-        }
+//        real mut{0};
+//        if (const real denominator = max(SST::a_1 * omega, vorticity * f2); denominator > 1e-25) {
+//          mut = SST::a_1 * rhoK / denominator;
+//        }
+//        zone->mut(i, j, k) = mut;
+//        if constexpr (mix_model != MixtureModel::Air) {
+//          zone->turb_therm_cond(i, j, k) = mut * zone->cp(i, j, k) / param->Prt;
+//        } else {
+//          constexpr real cp{gamma_air * R_u / mw_air / (gamma_air - 1)};
+//          zone->turb_therm_cond(i, j, k) = mut * cp / param->Prt;
+//        }
+        const real mut{zone->mut(i,j,k)};
 
         // Next, compute the source term for turbulent kinetic energy.
         const real divU = u_x + v_y + w_z;
@@ -130,23 +131,6 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
         dq(i, j, k, n_spec + 5) += jac * (prod_k - diss_k);
 
         // omega source term
-        // Originally, the computation of f1 and gradients of tke and omega should be here.
-        // However, we move them upward because the param1 and param2 can be re-used there, 
-        // which reduces the amount of computation.
-
-        //real f1{1};
-        //if (dy > 1e-25) {
-        //  const real param1{std::sqrt(tke) / (0.09 * omega * dy)};
-
-        //  const real d2 = dy * dy;
-        //  const real param2{500 * zone->mul(i, j, k) / (density * d2 * omega)};
-        //  const real CDkomega{max(1e-20, inter_var)};
-        //  const real param3{4 * density * SST::sigma_omega2 * tke / (CDkomega * d2)};
-
-        //  const real arg1{min(max(param1, param2), param3)};
-        //  f1 = std::tanh(arg1 * arg1 * arg1 * arg1);
-        //}
-
         const real gamma = SST::gamma2 + SST::delta_gamma * f1;
         const real prod_omega = gamma * density / mut * prod_k + (1 - f1) * inter_var;
         const real beta = SST::beta_2 + SST::delta_beta * f1;
