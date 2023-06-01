@@ -88,7 +88,7 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
         // In order to alleviate the computational burden, we put the computation of mut here.
         const real rhoK = zone->cv(i, j, k, n_spec + 5);
         const real tke = zone->sv(i, j, k, n_spec);
-        const real vorticity = (v_x - u_y) * (v_x - u_y) + (w_x - u_z) * (w_x - u_z) + (w_y - v_z) * (w_y - v_z);
+        const real vorticity = std::sqrt((v_x - u_y) * (v_x - u_y) + (w_x - u_z) * (w_x - u_z) + (w_y - v_z) * (w_y - v_z));
 
         // If wall, mut=0. Else, compute mut as in the if statement.
         real f1{1}, f2{1};

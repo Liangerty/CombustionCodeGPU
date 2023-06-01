@@ -156,7 +156,7 @@ __global__ void initialize_mut(DZone *zone, DParameter *param) {
       const real rhoK = zone->cv(i, j, k, n_spec + 5);
       const real tke = zone->sv(i, j, k, n_spec);
       const real omega = zone->sv(i, j, k, n_spec + 1);
-      const real vorticity = (v_x - u_y) * (v_x - u_y) + (w_x - u_z) * (w_x - u_z) + (w_y - v_z) * (w_y - v_z);
+      const real vorticity = std::sqrt((v_x - u_y) * (v_x - u_y) + (w_x - u_z) * (w_x - u_z) + (w_y - v_z) * (w_y - v_z));
       const real density = zone->bv(i, j, k, 0);
 
       // If wall, mut=0. Else, compute mut as in the if statement.
