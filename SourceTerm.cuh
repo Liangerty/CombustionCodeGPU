@@ -22,6 +22,9 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
         break;
       case 2:
       default: // SST
+        const real dy = zone->wall_distance(i, j, k);
+        const integer n_spec{zone->n_spec};
+
         const auto &m = zone->metric(i, j, k);
         const real xi_x{m(1, 1)}, xi_y{m(1, 2)}, xi_z{m(1, 3)};
         const real eta_x{m(2, 1)}, eta_y{m(2, 2)}, eta_z{m(2, 3)};
@@ -56,7 +59,6 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
         const real w_z = 0.5 * (xi_z * (bv(i + 1, j, k, 3) - bv(i - 1, j, k, 3)) +
                                 eta_z * (bv(i, j + 1, k, 3) - bv(i, j - 1, k, 3)) +
                                 zeta_z * (bv(i, j, k + 1, 3) - bv(i, j, k - 1, 3)));
-        const integer n_spec{zone->n_spec};
         const real density = zone->bv(i, j, k, 0);
         const real omega = zone->sv(i, j, k, n_spec + 1);
         auto &sv = zone->sv;
@@ -92,7 +94,7 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
 
         // If wall, mut=0. Else, compute mut as in the if statement.
         real f1{1};//, f2{1};
-        const real dy = zone->wall_distance(i, j, k);
+        //const real dy = zone->wall_distance(i, j, k);
         if (dy > 1e-25) {
           const real param1{std::sqrt(tke) / (0.09 * omega * dy)};
 
@@ -120,22 +122,25 @@ __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
 //        }
         const real mut{zone->mut(i,j,k)};
 
-        // Next, compute the source term for turbulent kinetic energy.
-        const real divU = u_x + v_y + w_z;
-        const real divU2 = divU * divU;
+        if (mut>1e-25) {
+          // Next, compute the source term for turbulent kinetic energy.
+          const real divU = u_x + v_y + w_z;
+          const real divU2 = divU * divU;
 
-        const real prod_k = mut * (2 * (u_x * u_x + v_y * v_y + w_z * w_z) - 2 / 3 * divU2 + (u_y + v_x) * (u_y + v_x) +
-                                   (u_z + w_x) * (u_z + w_x) + (v_z + w_y) * (v_z + w_y)) - 2 / 3 * rhoK * divU;
-        const real diss_k = SST::beta_star * rhoK * omega;
-        const real jac = zone->jac(i, j, k);
-        dq(i, j, k, n_spec + 5) += jac * (prod_k - diss_k);
+          const real prod_k = mut * (2 * (u_x * u_x + v_y * v_y + w_z * w_z) - 2 / 3 * divU2 + (u_y + v_x) * (u_y + v_x) +
+            (u_z + w_x) * (u_z + w_x) + (v_z + w_y) * (v_z + w_y)) - 2 / 3 * rhoK * divU;
+          const real diss_k = SST::beta_star * rhoK * omega;
+          const real jac = zone->jac(i, j, k);
+          dq(i, j, k, n_spec + 5) += jac * (prod_k - diss_k);
 
-        // omega source term
-        const real gamma = SST::gamma2 + SST::delta_gamma * f1;
-        const real prod_omega = gamma * density / mut * prod_k + (1 - f1) * inter_var;
-        const real beta = SST::beta_2 + SST::delta_beta * f1;
-        const real diss_omega = beta * density * omega * omega;
-        dq(i, j, k, n_spec + 6) += jac * (prod_omega - diss_omega);
+          // omega source term
+          const real gamma = SST::gamma2 + SST::delta_gamma * f1;
+          const real prod_omega = gamma * density / mut * prod_k + (1 - f1) * inter_var;
+          const real beta = SST::beta_2 + SST::delta_beta * f1;
+          const real diss_omega = beta * density * omega * omega;
+          dq(i, j, k, n_spec + 6) += jac * (prod_omega - diss_omega);
+        }
+
     }
   }
 }

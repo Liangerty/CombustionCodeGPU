@@ -275,25 +275,6 @@ void DBoundCond<mix_model, turb_method>::link_bc_to_boundaries(Mesh &mesh,
     link_boundary_and_condition(mesh[i].boundary, inflow_info, n_inflow, i_inflow, i);
     link_boundary_and_condition(mesh[i].boundary, outflow_info, n_outflow, i_outflow, i);
   }
-  for (auto i = 0; i < n_block; i++) {
-    for (size_t l = 0; l < n_wall; l++) {
-      const auto nb = wall_info[l].n_boundary;
-      for (size_t m = 0; m < nb; m++) {
-        auto i_zone = wall_info[l].boundary[m].x;
-        if (i_zone != i) {
-          continue;
-        }
-        auto &b = mesh[i].boundary[wall_info[l].boundary[m].y];
-        for (int q = 0; q < 3; ++q) {
-          if (q == b.face) continue;
-          b.range_start[q] += ngg;
-          b.range_end[q] -= ngg;
-        }
-      }
-    }
-    cudaMemcpy(field[i].h_ptr->boundary, mesh[i].boundary.data(), mesh[i].boundary.size() * sizeof(Boundary),
-               cudaMemcpyHostToDevice);
-  }
   delete[]i_wall;
   delete[]i_inflow;
   delete[]i_outflow;
