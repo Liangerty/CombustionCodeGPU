@@ -10,6 +10,7 @@
 #include <iostream>
 #include <mpi.h>
 #include "SourceTerm.cuh"
+#include "PostProcess.h"
 
 namespace cfd {
 // Instantiate all possible drivers
@@ -279,6 +280,7 @@ void Driver<mix_model, turb_method>::steady_simulation() {
     cudaDeviceSynchronize();
     if (step % output_file == 0) {
       output.print_field(step);
+      post_process();
     }
   }
   delete[] bpg;
@@ -387,6 +389,11 @@ void Driver<mix_model, turb_method>::steady_screen_output(integer step, real err
 //  std::cout << std::format("{:>38}    converged to: {:>11.4e}\n", "T ", res[3]);
 //  std::cout << std::format("CPU time for this step is {:>16.8f}s\n", time.step_time);
 //  std::cout << std::format("Total elapsed CPU time is {:>16.8f}s\n", time.elapsed_time);
+}
+
+template<MixtureModel mix_model, TurbMethod turb_method>
+void Driver<mix_model, turb_method>::post_process() {
+  wall_friction_heatflux_2d(mesh,field,parameter);
 }
 
 template<integer N>

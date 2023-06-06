@@ -84,7 +84,7 @@ register_inflow(Inflow<mix_model, turb_method> *&inflows, integer n_bc, std::vec
         continue;
       }
       bc_info[i].label = bc_label;
-      Inflow<mix_model, turb_method> inflow(bc, species, parameter);
+      Inflow<mix_model, turb_method> inflow(bc_name, species, parameter);
       inflow.copy_to_gpu(&(inflows[i]), species, parameter);
     }
   }

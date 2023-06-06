@@ -30,7 +30,7 @@ list(APPEND src_file
   Limiter.cuh
   main.cu Mesh.h Mesh.cpp
   Output.hpp
-  Parallel.h Parallel.cpp Parameter.h Parameter.cpp
+  Parallel.h Parallel.cpp Parameter.h Parameter.cpp PostProcess.h PostProcess.cu
   Reconstruction.cu Reconstruction.cuh SchemeSelector.cuh SourceTerm.cuh
   Transport.cuh Transport.cu TimeAdvanceFunc.cu TimeAdvanceFunc.cuh Thermo.cuh Thermo.cu
   ViscousScheme.cuh

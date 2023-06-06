@@ -52,6 +52,7 @@ public:
   [[nodiscard]] const auto& get_string_array(const std::string &name)const{return string_array.at(name);}
 
   void update_parameter(const std::string &name, const int new_value) { int_parameters[name] = new_value; }
+  void update_parameter(const std::string &name, const real new_value) { real_parameters[name] = new_value; }
 
   ~Parameter() = default;
 

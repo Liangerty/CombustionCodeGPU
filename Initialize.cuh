@@ -67,7 +67,8 @@ initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vector<Field<
   const integer tot_group{parameter.get_int("groups_init")};
   std::vector<Inflow<mix_model, turb_method>> groups_inflow;
   const std::string default_init = parameter.get_string("default_init");
-  Inflow<mix_model, turb_method> default_inflow(parameter.get_struct(default_init), species, parameter);
+//  Inflow<mix_model, turb_method> default_inflow(parameter.get_struct(default_init), species, parameter);
+  Inflow<mix_model, turb_method> default_inflow(default_init, species, parameter);
   groups_inflow.push_back(default_inflow);
 
   std::vector<real> xs{}, xe{}, ys{}, ye{}, zs{}, ze{};
@@ -82,9 +83,9 @@ initialize_from_start(Parameter &parameter, const Mesh &mesh, std::vector<Field<
       zs.push_back(std::get<real>(patch_cond.at("z0")));
       ze.push_back(std::get<real>(patch_cond.at("z1")));
       if (patch_cond.find("label") != patch_cond.cend()) {
-        groups_inflow.emplace_back(parameter.get_struct(std::get<std::string>(patch_cond.at("label"))), species, parameter);
+        groups_inflow.emplace_back(std::get<std::string>(patch_cond.at("label")), species, parameter);
       } else {
-        groups_inflow.emplace_back(parameter.get_struct(patch_struct_name), species, parameter);
+        groups_inflow.emplace_back(patch_struct_name, species, parameter);
       }
     }
   }
@@ -397,7 +398,7 @@ void initialize_spec_from_inflow(cfd::Parameter &parameter, const cfd::Mesh &mes
   // then we implement it just by copying the previous function "initialize_from_start",
   // which should be easy.
   const std::string default_init = parameter.get_string("default_init");
-  Inflow<mix_model, turb_method> inflow(parameter.get_struct(default_init), species, parameter);
+  Inflow<mix_model, turb_method> inflow(default_init, species, parameter);
   for (int blk = 0; blk < mesh.n_block; ++blk) {
     const integer mx{mesh[blk].mx}, my{mesh[blk].my}, mz{mesh[blk].mz};
     const auto n_spec = parameter.get_int("n_spec");
@@ -427,7 +428,7 @@ void initialize_turb_from_inflow(cfd::Parameter &parameter, const cfd::Mesh &mes
   // then we implement it just by copying the previous function "initialize_from_start",
   // which should be easy.
   const std::string default_init = parameter.get_string("default_init");
-  Inflow<mix_model, turb_method> inflow(parameter.get_struct(default_init), species, parameter);
+  Inflow<mix_model, turb_method> inflow(default_init, species, parameter);
   const auto n_turb = parameter.get_int("n_turb");
   const auto n_spec = parameter.get_int("n_spec");
   for (int blk = 0; blk < mesh.n_block; ++blk) {

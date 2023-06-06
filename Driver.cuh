@@ -27,6 +27,8 @@ private:
 
   void steady_screen_output(integer step, real err_max);
 
+  void post_process();
+
 public:
   integer myid = 0;
   gxl::Time time;
