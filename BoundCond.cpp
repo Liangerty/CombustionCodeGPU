@@ -1,7 +1,5 @@
 #include "BoundCond.h"
-#include "ChemData.h"
 #include "gxl_lib/MyString.h"
-#include <cmath>
 
 cfd::Wall::Wall(integer type_label, std::ifstream &bc_file) : label(type_label) {
   std::map<std::string, std::string> opt;

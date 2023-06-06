@@ -7,7 +7,6 @@
 
 namespace cfd {
 
-//struct DZone;
 struct DParameter;
 
 template<MixtureModel mix_model, TurbMethod turb_method>

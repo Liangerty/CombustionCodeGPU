@@ -4,10 +4,10 @@
 
 #include "Define.h"
 #include "Field.h"
+#include "DParameter.h"
 #include "Thermo.cuh"
 #include "Constants.h"
 #include "Transport.cuh"
-#include "DParameter.h"
 
 namespace cfd {
 
@@ -78,11 +78,6 @@ __global__ void update_physical_properties(DZone *zone, DParameter *param) {
   integer j = (integer) (blockDim.y * blockIdx.y + threadIdx.y) - 1;
   integer k = (integer) (blockDim.z * blockIdx.z + threadIdx.z) - 1;
   if (i >= mx + 1 || j >= my + 1 || k >= mz + 1) return;
-//  const integer ngg{zone->ngg}, mx{zone->mx}, my{zone->my}, mz{zone->mz};
-//  integer i = (integer) (blockDim.x * blockIdx.x + threadIdx.x) - ngg;
-//  integer j = (integer) (blockDim.y * blockIdx.y + threadIdx.y) - ngg;
-//  integer k = (integer) (blockDim.z * blockIdx.z + threadIdx.z) - ngg;
-//  if (i >= mx + ngg || j >= my + ngg || k >= mz + ngg) return;
 
   const real temperature{zone->bv(i, j, k, 5)};
   if constexpr (mix_model != MixtureModel::Air) {

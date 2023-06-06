@@ -1,13 +1,9 @@
 ﻿#pragma once
 
 #include "Parameter.h"
-//#include "gxl_lib/Array.hpp"
 #include "Field.h"
 #include <filesystem>
 #include <fstream>
-//#include <span>
-//#include <vector>
-//#include <functional>
 
 namespace cfd {
 class Mesh;

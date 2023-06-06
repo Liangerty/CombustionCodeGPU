@@ -1,17 +1,13 @@
 #pragma once
 #include "Define.h"
 #include "DParameter.h"
-#include <cuda_runtime.h>
 #include "Field.h"
 #include "Constants.h"
 
 namespace cfd {
 struct DZone;
 
-//void store_last_step(DZone *zone);
 __global__ void store_last_step(DZone *zone);
-
-__global__ void set_dq_to_0(cfd::DZone *zone);
 
 template<MixtureModel mixture>
 __global__ void local_time_step(cfd::DZone *zone, DParameter *param);

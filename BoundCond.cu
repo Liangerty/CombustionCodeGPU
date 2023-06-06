@@ -1,8 +1,5 @@
-#include "BoundCond.h"
-#include "Transport.cuh"
 #include "BoundCond.cuh"
 #include "Field.h"
-#include "DParameter.h"
 #include "FieldOperation.cuh"
 
 #ifdef GPU

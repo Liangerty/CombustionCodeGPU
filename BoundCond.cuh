@@ -1,9 +1,6 @@
 #pragma once
 
-#include "Define.h"
-#include <vector_types.h>
 #include "BoundCond.h"
-#include <vector>
 #include "Mesh.h"
 
 namespace cfd {
