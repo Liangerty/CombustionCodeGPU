@@ -13,6 +13,9 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter,Species& species, Reaction
                                                                                   parameter.get_int("viscous_order")},
                                                                               rans_model{
                                                                                   parameter.get_int("RANS_model")},
+                                                                              implicit_method{parameter.get_int("implicit_method")},
+                                                                              DPLUR_inner_step{parameter.get_int("DPLUR_inner_step")},
+                                                                              chemSrcMethod{parameter.get_int("chemSrcMethod")},
                                                                               /*output_screen(
                                                                                   parameter.get_int("output_screen")),*/
                                                                               Pr(parameter.get_real("prandtl_number")),

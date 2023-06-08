@@ -178,8 +178,6 @@ __global__ void initialize_mut(DZone *zone, DParameter *param) {
   integer k = (integer) (blockDim.z * blockIdx.z + threadIdx.z) - 1;
   if (i >= mx + 1 || j >= my + 1 || k >= mz + 1) return;
 
-  auto &dq = zone->dq;
-
   switch (param->rans_model) {
     case 1://SA
       break;

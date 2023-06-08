@@ -23,10 +23,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(APPEND src_file
   BoundCond.h BoundCond.cpp BoundCond.cu BoundCond.cuh
   ChemData.h ChemData.cpp Constants.h
-  DataCommunication.cuh DataCommunication.cu Define.h DParameter.cu DParameter.h Driver.cu Driver.cuh
+  DataCommunication.cuh DataCommunication.cu Define.h DParameter.cu DParameter.h DPLURHPP.cuh Driver.cu Driver.cuh
   Element.h Element.cpp
   Field.h Field.cu FieldOperation.cuh FieldOperation.cu
-  Initialize.cuh Initialize.cu InviscidScheme.cuh
+  ImplicitTreatmentHPP.cuh Initialize.cuh Initialize.cu InviscidScheme.cuh
   Limiter.cuh
   main.cu Mesh.h Mesh.cpp
   Output.hpp

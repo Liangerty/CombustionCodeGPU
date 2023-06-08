@@ -11,6 +11,7 @@
 #include <mpi.h>
 #include "SourceTerm.cuh"
 #include "PostProcess.h"
+#include "ImplicitTreatmentHPP.cuh"
 
 namespace cfd {
 // Instantiate all possible drivers
@@ -159,7 +160,7 @@ void Driver<mix_model, turb_method>::acquire_wall_distance() {
     }
     const integer n_proc{parameter.get_int("n_proc")};
     integer *n_wall_point = new integer[n_proc];
-    integer n_wall_this=static_cast<integer>(wall_coor.size());
+    integer n_wall_this = static_cast<integer>(wall_coor.size());
     MPI_Allgather(&n_wall_this, 1, MPI_INT, n_wall_point, 1, MPI_INT, MPI_COMM_WORLD);
     integer *disp = new integer[n_proc];
     disp[0] = 0;
@@ -178,13 +179,13 @@ void Driver<mix_model, turb_method>::acquire_wall_distance() {
     cudaMemcpy(wall_corr_gpu, wall_points.data(), total_wall_number * sizeof(real), cudaMemcpyHostToDevice);
     for (integer blk = 0; blk < mesh.n_block; ++blk) {
       const integer ngg{mesh[0].ngg};
-      const integer mx{mesh[blk].mx+2*ngg}, my{mesh[blk].my+2*ngg}, mz{mesh[blk].mz+2*ngg};
+      const integer mx{mesh[blk].mx + 2 * ngg}, my{mesh[blk].my + 2 * ngg}, mz{mesh[blk].mz + 2 * ngg};
       dim3 tpb{512, 1, 1};
       dim3 bpg{(mx - 1) / tpb.x + 1, (my - 1) / tpb.y + 1, (mz - 1) / tpb.z + 1};
       compute_wall_distance<<<bpg, tpb>>>(wall_corr_gpu, field[blk].d_ptr, total_wall_number);
 //      cudaMemcpy(field[blk].var_without_ghost_grid.data(), field[blk].h_ptr->wall_distance.data(), field[blk].h_ptr->wall_distance.size()*sizeof(real),cudaMemcpyDeviceToHost);
     }
-    if (myid==0){
+    if (myid == 0) {
       printf("Finish computing wall distance.\n");
     }
 
@@ -244,6 +245,7 @@ void Driver<mix_model, turb_method>::steady_simulation() {
       // compute local time step
       local_time_step<mix_model><<<bpg[b], tpb>>>(field[b].d_ptr, param);
       // implicit treatment if needed
+      implicit_treatment<mix_model, turb_method>(mesh[b], param, field[b].d_ptr, parameter, field[b].h_ptr);
 
       // update conservative and basic variables
       update_cv_and_bv<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
@@ -393,7 +395,7 @@ void Driver<mix_model, turb_method>::steady_screen_output(integer step, real err
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 void Driver<mix_model, turb_method>::post_process() {
-  wall_friction_heatflux_2d(mesh,field,parameter);
+  wall_friction_heatflux_2d(mesh, field, parameter);
 }
 
 template<integer N>
@@ -460,6 +462,6 @@ __global__ void compute_wall_distance(const real *wall_point_coor, DZone *zone, 
       wall_dist = d;
     }
   }
-  wall_dist=std::sqrt(wall_dist);
+  wall_dist = std::sqrt(wall_dist);
 }
 } // cfd

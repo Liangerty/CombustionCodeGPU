@@ -1,4 +1,5 @@
 #pragma once
+
 #include "Define.h"
 #include "DParameter.h"
 #include "Field.h"
@@ -37,10 +38,15 @@ __global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param) {
   const real W = u * m(3, 1) + v * m(3, 2) + w * m(3, 3);
 
   const auto acoustic_speed = zone->acoustic_speed(i, j, k);
-  real spectral_radius_inviscid = std::abs(U) + std::abs(V) + acoustic_speed * (grad_xi + grad_eta);
+  auto &inviscid_spectral_radius = zone->inv_spectr_rad(i, j, k);
+  inviscid_spectral_radius[0] = std::abs(U) + acoustic_speed * grad_xi;
+  inviscid_spectral_radius[1] = std::abs(V) + acoustic_speed * grad_eta;
+  inviscid_spectral_radius[2] = 0;
   if (dim == 3) {
-    spectral_radius_inviscid += std::abs(W) + acoustic_speed * grad_zeta;
+    inviscid_spectral_radius[2] = std::abs(W) + acoustic_speed * grad_zeta;
   }
+  real spectral_radius_inviscid =
+      inviscid_spectral_radius[0] + inviscid_spectral_radius[1] + inviscid_spectral_radius[2];
 
   // Next, compute the viscous spectral radius
   real gamma{gamma_air};
@@ -54,6 +60,7 @@ __global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param) {
     spectral_radius_viscous += grad_zeta * grad_zeta;
   }
   spectral_radius_viscous *= coeff_1 * coeff_2;
+  zone->visc_spectr_rad(i, j, k) = spectral_radius_viscous;
 
   zone->dt_local(i, j, k) = param->cfl / (spectral_radius_inviscid + spectral_radius_viscous);
 }
