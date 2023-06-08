@@ -75,6 +75,14 @@ void Driver<mix_model, turb_method>::initialize_computation() {
     }
   }
 
+  if (mesh.dimension == 2) {
+    for (auto b = 0; b < mesh.n_block; ++b) {
+      const auto mx{mesh[b].mx}, my{mesh[b].my};
+      dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, 1};
+      eliminate_k_gradient <<<BPG, tpb >>> (field[b].d_ptr);
+    }
+  }
+
   // First, compute the conservative variables from basic variables
   for (auto i = 0; i < mesh.n_block; ++i) {
     integer mx{mesh[i].mx}, my{mesh[i].my}, mz{mesh[i].mz};
