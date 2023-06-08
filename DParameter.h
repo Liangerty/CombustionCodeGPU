@@ -19,6 +19,9 @@ struct DParameter {
   integer limiter=0;  // The tag for limiter method
   integer viscous_scheme=0; // The tag for viscous scheme. 0 - Inviscid, 2 - 2nd order central discretization
   integer rans_model=0;  // The tag for RANS model. 0 - Laminar, 1 - SA, 2 - SST
+  integer implicit_method = 0;  // The tag for implicit treatment method. 0 - explicit, 1 - DPLUR
+  integer DPLUR_inner_step = 2; // If we use DPLUR, then we need a specified number of inner iterations.
+  integer chemSrcMethod = 0;  // For finite rate chemistry, we need to know how to implicitly treat the chemical source
 //  integer output_screen=10; // determine the interval between screen outputs
   real Pr=0.72;
   real cfl=1;

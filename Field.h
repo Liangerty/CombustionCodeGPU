@@ -46,7 +46,9 @@ struct DZone {
 
   // Variables used in computation
   ggxl::VectorField3D<real> dq; // The residual for flux computing
-  ggxl::Array3D<real[3]> inv_spectr_rad;  // inviscid spectral radius. Used when LUSGS type temporal scheme is used.
+  ggxl::VectorField3D<real> dq0; // Used when DPLUR is enabled
+  ggxl::VectorField3D<real> dqk; // Used when DPLUR is enabled
+  ggxl::Array3D<real[3]> inv_spectr_rad;  // inviscid spectral radius. Used when DPLUR type temporal scheme is used.
   ggxl::Array3D<real> visc_spectr_rad;  // viscous spectral radius.
   ggxl::Array3D<real> dt_local; //local time step. Used for steady flow simulation
 };
