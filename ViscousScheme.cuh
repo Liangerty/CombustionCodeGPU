@@ -4,6 +4,7 @@
 #include "Thermo.cuh"
 #include "Constants.h"
 #include <cmath>
+#include "SST.cuh"
 
 namespace cfd {
 
@@ -156,9 +157,6 @@ __device__ void compute_fv_2nd_order(const integer idx[3], DZone *zone, real *fv
 
   if constexpr (turb_method == TurbMethod::RANS) {
     const integer rans_model{param->rans_model};
-    const integer n_spec{zone->n_spec};
-    const integer it = zone->n_spec;
-    auto &sv = zone->sv;
 
     switch (rans_model) {
       case 1: // SA
@@ -166,52 +164,8 @@ __device__ void compute_fv_2nd_order(const integer idx[3], DZone *zone, real *fv
       case 2: // SST
       default:
         // Default SST
-        const real k_xi = sv(i + 1, j, k, it) - sv(i, j, k, it);
-        const real k_eta =
-            0.25 * (sv(i, j + 1, k, it) - sv(i, j - 1, k, it) + sv(i + 1, j + 1, k, it) - sv(i + 1, j - 1, k, it));
-        const real k_zeta =
-            0.25 * (sv(i, j, k + 1, it) - sv(i, j, k - 1, it) + sv(i + 1, j, k + 1, it) - sv(i + 1, j, k - 1, it));
-
-        const real k_x = k_xi * xi_x + k_eta * eta_x + k_zeta * zeta_x;
-        const real k_y = k_xi * xi_y + k_eta * eta_y + k_zeta * zeta_y;
-        const real k_z = k_xi * xi_z + k_eta * eta_z + k_zeta * zeta_z;
-
-        const real omega_xi = sv(i + 1, j, k, it + 1) - sv(i, j, k, it + 1);
-        const real omega_eta = 0.25 * (sv(i, j + 1, k, it + 1) - sv(i, j - 1, k, it + 1) + sv(i + 1, j + 1, k, it + 1) -
-                                       sv(i + 1, j - 1, k, it + 1));
-        const real omega_zeta = 0.25 *
-                                (sv(i, j, k + 1, it + 1) - sv(i, j, k - 1, it + 1) + sv(i + 1, j, k + 1, it + 1) -
-                                 sv(i + 1, j, k - 1, it + 1));
-
-        const real omega_x = omega_xi * xi_x + omega_eta * eta_x + omega_zeta * zeta_x;
-        const real omega_y = omega_xi * xi_y + omega_eta * eta_y + omega_zeta * zeta_y;
-        const real omega_z = omega_xi * xi_z + omega_eta * eta_z + omega_zeta * zeta_z;
-
-        const real wall_dist = 0.5 * (zone->wall_distance(i, j, k) + zone->wall_distance(i + 1, j, k));
-
-        real f1{1};
-        if (wall_dist > 1e-25) {
-          const real km = 0.5 * (sv(i, j, k, it) + sv(i + 1, j, k, it));
-          const real omegam = 0.5 * (sv(i, j, k, it + 1) + sv(i + 1, j, k, it + 1));
-          const real param1{std::sqrt(km) / (0.09 * omegam * wall_dist)};
-
-          const real rhom = 0.5 * (pv(i, j, k, 0) + pv(i + 1, j, k, 0));
-          const real d2 = wall_dist * wall_dist;
-          const real param2{500 * mul / (rhom * d2 * omegam)};
-          const real CDkomega{max(1e-20, 2 * rhom * cfd::SST::sigma_omega2 / omegam *
-                                         (k_x * omega_x + k_y * omega_y + k_z * omega_z))};
-          const real param3{4 * rhom * SST::sigma_omega2 * km / (CDkomega * d2)};
-
-          const real arg1{min(max(param1, param2), param3)};
-          f1 = std::tanh(arg1 * arg1 * arg1 * arg1);
-        }
-
-        const real sigma_k = SST::sigma_k2 + SST::delta_sigma_k * f1;
-        const real sigma_omega = SST::sigma_omega2 + SST::delta_sigma_omega * f1;
-
-        fv[5 + n_spec] = (mul + mut * sigma_k) * (xi_x_div_jac * k_x + xi_y_div_jac * k_y + xi_z_div_jac * k_z);
-        fv[6 + n_spec] =
-            (mul + mut * sigma_omega) * (xi_x_div_jac * omega_x + xi_y_div_jac * omega_y + xi_z_div_jac * omega_z);
+        SST::compute_fv_2nd_order(zone, fv, param, i, j, k, xi_x, xi_y, xi_z, eta_x, eta_y, eta_z, zeta_x, zeta_y,
+                                  zeta_z, mul, mut, xi_x_div_jac, xi_y_div_jac, xi_z_div_jac);
     }
   }
 }
@@ -355,9 +309,6 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
 
   if constexpr (turb_method == TurbMethod::RANS) {
     const integer rans_model{param->rans_model};
-    const integer n_spec{zone->n_spec};
-    const integer it = zone->n_spec;
-    auto &sv = zone->sv;
 
     switch (rans_model) {
       case 1: // SA
@@ -365,52 +316,8 @@ __device__ void compute_gv_2nd_order(const integer *idx, DZone *zone, real *gv, 
       case 2: // SST
       default:
         // Default SST
-        const real k_xi =
-            0.25 * (sv(i + 1, j, k, it) - sv(i - 1, j, k, it) + sv(i + 1, j + 1, k, it) - sv(i - 1, j + 1, k, it));
-        const real k_eta = sv(i, j + 1, k, it) - sv(i, j, k, it);
-        const real k_zeta =
-            0.25 * (sv(i, j, k + 1, it) - sv(i, j, k - 1, it) + sv(i, j + 1, k + 1, it) - sv(i, j + 1, k - 1, it));
-
-        const real k_x = k_xi * xi_x + k_eta * eta_x + k_zeta * zeta_x;
-        const real k_y = k_xi * xi_y + k_eta * eta_y + k_zeta * zeta_y;
-        const real k_z = k_xi * xi_z + k_eta * eta_z + k_zeta * zeta_z;
-
-        const real omega_xi = 0.25 * (sv(i + 1, j, k, it + 1) - sv(i - 1, j, k, it + 1) + sv(i + 1, j + 1, k, it + 1) -
-                                      sv(i - 1, j + 1, k, it + 1));
-        const real omega_eta = sv(i, j + 1, k, it + 1) - sv(i, j, k, it + 1);
-        const real omega_zeta = 0.25 *
-                                (sv(i, j, k + 1, it + 1) - sv(i, j, k - 1, it + 1) + sv(i, j + 1, k + 1, it + 1) -
-                                 sv(i, j + 1, k - 1, it + 1));
-
-        const real omega_x = omega_xi * xi_x + omega_eta * eta_x + omega_zeta * zeta_x;
-        const real omega_y = omega_xi * xi_y + omega_eta * eta_y + omega_zeta * zeta_y;
-        const real omega_z = omega_xi * xi_z + omega_eta * eta_z + omega_zeta * zeta_z;
-
-        const real wall_dist = 0.5 * (zone->wall_distance(i, j, k) + zone->wall_distance(i, j + 1, k));
-
-        real f1{1};
-        if (wall_dist > 1e-25) {
-          const real km = 0.5 * (sv(i, j, k, it) + sv(i, j + 1, k, it));
-          const real omegam = 0.5 * (sv(i, j, k, it + 1) + sv(i, j + 1, k, it + 1));
-          const real param1{std::sqrt(km) / (0.09 * omegam * wall_dist)};
-
-          const real rhom = 0.5 * (pv(i, j, k, 0) + pv(i, j + 1, k, 0));
-          const real d2 = wall_dist * wall_dist;
-          const real param2{500 * mul / (rhom * d2 * omegam)};
-          const real CDkomega{max(1e-20, 2 * rhom * SST::sigma_omega2 / omegam *
-                                         (k_x * omega_x + k_y * omega_y + k_z * omega_z))};
-          const real param3{4 * rhom * SST::sigma_omega2 * km / (CDkomega * d2)};
-
-          const real arg1{min(max(param1, param2), param3)};
-          f1 = std::tanh(arg1 * arg1 * arg1 * arg1);
-        }
-
-        const real sigma_k = SST::sigma_k2 + SST::delta_sigma_k * f1;
-        const real sigma_omega = SST::sigma_omega2 + SST::delta_sigma_omega * f1;
-
-        gv[5 + n_spec] = (mul + mut * sigma_k) * (eta_x_div_jac * k_x + eta_y_div_jac * k_y + eta_z_div_jac * k_z);
-        gv[6 + n_spec] =
-            (mul + mut * sigma_omega) * (eta_x_div_jac * omega_x + eta_y_div_jac * omega_y + eta_z_div_jac * omega_z);
+        SST::compute_gv_2nd_order(zone, gv, param, i, j, k, xi_x, xi_y, xi_z, eta_x, eta_y, eta_z, zeta_x, zeta_y,
+                                  zeta_z, mul, mut, eta_x_div_jac, eta_y_div_jac, eta_z_div_jac);
     }
   }
 }
@@ -549,9 +456,6 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
 
   if constexpr (turb_method == TurbMethod::RANS) {
     const integer rans_model{param->rans_model};
-    const integer n_spec{zone->n_spec};
-    const integer it = zone->n_spec;
-    auto &sv = zone->sv;
 
     switch (rans_model) {
       case 1: // SA
@@ -559,52 +463,8 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
       case 2: // SST
       default:
         // Default SST
-        const real k_xi =
-            0.25 * (sv(i + 1, j, k, it) - sv(i - 1, j, k, it) + sv(i + 1, j, k + 1, it) - sv(i - 1, j, k + 1, it));
-        const real k_eta =
-            0.25 * (sv(i, j + 1, k, it) - sv(i, j - 1, k, it) + sv(i, j + 1, k + 1, it) - sv(i, j - 1, k + 1, it));
-        const real k_zeta = sv(i, j, k + 1, it) - sv(i, j, k, it);
-
-        const real k_x = k_xi * xi_x + k_eta * eta_x + k_zeta * zeta_x;
-        const real k_y = k_xi * xi_y + k_eta * eta_y + k_zeta * zeta_y;
-        const real k_z = k_xi * xi_z + k_eta * eta_z + k_zeta * zeta_z;
-
-        const real omega_xi = 0.25 * (sv(i + 1, j, k, it + 1) - sv(i - 1, j, k, it + 1) + sv(i + 1, j, k + 1, it + 1) -
-                                      sv(i - 1, j, k + 1, it + 1));
-        const real omega_eta = 0.25 * (sv(i, j + 1, k, it + 1) - sv(i, j - 1, k, it + 1) + sv(i, j + 1, k + 1, it + 1) -
-                                       sv(i, j - 1, k + 1, it + 1));
-        const real omega_zeta = sv(i, j, k + 1, it + 1) - sv(i, j, k, it + 1);
-
-        const real omega_x = omega_xi * xi_x + omega_eta * eta_x + omega_zeta * zeta_x;
-        const real omega_y = omega_xi * xi_y + omega_eta * eta_y + omega_zeta * zeta_y;
-        const real omega_z = omega_xi * xi_z + omega_eta * eta_z + omega_zeta * zeta_z;
-
-        const real wall_dist = 0.5 * (zone->wall_distance(i, j, k) + zone->wall_distance(i, j, k + 1));
-
-        real f1{1};
-        if (wall_dist > 1e-25) {
-          const real km = 0.5 * (sv(i, j, k, it) + sv(i, j, k + 1, it));
-          const real omegam = 0.5 * (sv(i, j, k, it + 1) + sv(i, j, k + 1, it + 1));
-          const real param1{std::sqrt(km) / (0.09 * omegam * wall_dist)};
-
-          const real rhom = 0.5 * (pv(i, j, k, 0) + pv(i, j, k + 1, 0));
-          const real d2 = wall_dist * wall_dist;
-          const real param2{500 * mul / (rhom * d2 * omegam)};
-          const real CDkomega{max(1e-20, 2 * rhom * SST::sigma_omega2 / omegam *
-                                         (k_x * omega_x + k_y * omega_y + k_z * omega_z))};
-          const real param3{4 * rhom * SST::sigma_omega2 * km / (CDkomega * d2)};
-
-          const real arg1{min(max(param1, param2), param3)};
-          f1 = std::tanh(arg1 * arg1 * arg1 * arg1);
-        }
-
-        const real sigma_k = SST::sigma_k2 + SST::delta_sigma_k * f1;
-        const real sigma_omega = SST::sigma_omega2 + SST::delta_sigma_omega * f1;
-
-        hv[5 + n_spec] = (mul + mut * sigma_k) * (zeta_x_div_jac * k_x + zeta_y_div_jac * k_y + zeta_z_div_jac * k_z);
-        hv[6 + n_spec] =
-            (mul + mut * sigma_omega) *
-            (zeta_x_div_jac * omega_x + zeta_y_div_jac * omega_y + zeta_z_div_jac * omega_z);
+        SST::compute_hv_2nd_order(zone, hv, param, i, j, k, xi_x, xi_y, xi_z, eta_x, eta_y, eta_z, zeta_x, zeta_y,
+                                  zeta_z, mul, mut, zeta_x_div_jac, zeta_y_div_jac, zeta_z_div_jac);
     }
   }
 }

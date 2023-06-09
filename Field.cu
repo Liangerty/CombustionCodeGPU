@@ -138,6 +138,9 @@ void cfd::Field<mix_model, turb_method>::setup_device_memory(const Parameter &pa
     if (parameter.get_int("RANS_model") == 2) {
       // SST
       h_ptr->wall_distance.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
+      if (parameter.get_int("turb_implicit") == 1) {
+        h_ptr->turb_src_jac.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, 2, 0);
+      }
     }
   }
 

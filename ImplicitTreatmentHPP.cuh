@@ -3,6 +3,7 @@
 #include "Define.h"
 #include "DParameter.h"
 #include "DPLURHPP.cuh"
+#include "SST.cuh"
 
 namespace cfd{
 template<MixtureModel mixture_model, TurbMethod turb_method>
@@ -16,6 +17,24 @@ void implicit_treatment(const Block &block, const DParameter *param, DZone *d_pt
           case 1: // Point implicit method
           default: // Explicit treat the chemical source
             break;
+        }
+      }
+      if constexpr (turb_method==TurbMethod::RANS){
+        if (parameter.get_int("turb_implicit")==1){
+          const integer extent[3]{block.mx, block.my, block.mz};
+          const integer dim{extent[2] == 1 ? 2 : 3};
+          dim3 tpb{8, 8, 4};
+          if (dim == 2) {
+            tpb = {16, 16, 1};
+          }
+          const dim3 bpg{(extent[0] - 1) / tpb.x + 1, (extent[1] - 1) / tpb.y + 1, (extent[2] - 1) / tpb.z + 1};
+          switch (parameter.get_int("RANS_model")) {
+            case 1:
+            case 2: //SST
+              SST::implicit_treat<<<bpg,tpb>>>(d_ptr);
+              break;
+            default:break;
+          }
         }
       }
       return;

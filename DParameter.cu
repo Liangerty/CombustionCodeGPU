@@ -13,6 +13,7 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter,Species& species, Reaction
                                                                                   parameter.get_int("viscous_order")},
                                                                               rans_model{
                                                                                   parameter.get_int("RANS_model")},
+                                                                              turb_implicit{parameter.get_int("turb_implicit")},
                                                                               implicit_method{parameter.get_int("implicit_method")},
                                                                               DPLUR_inner_step{parameter.get_int("DPLUR_inner_step")},
                                                                               chemSrcMethod{parameter.get_int("chemSrcMethod")},

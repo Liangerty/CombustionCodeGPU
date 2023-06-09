@@ -1,6 +1,7 @@
 #include "BoundCond.cuh"
 #include "Field.h"
 #include "FieldOperation.cuh"
+#include "SST.cuh"
 
 #ifdef GPU
 namespace cfd {

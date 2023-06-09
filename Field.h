@@ -41,6 +41,7 @@ struct DZone {
   // Turbulent variables
   ggxl::Array3D<real> mut;  // turbulent viscosity
   ggxl::Array3D<real> turb_therm_cond; // turbulent thermal conductivity
+  ggxl::VectorField3D<real> turb_src_jac; // turbulent source jacobian, for implicit treatment
   // Flamelet variables
   ggxl::Array3D<real> scalar_diss_rate;  // scalar dissipation rate
 

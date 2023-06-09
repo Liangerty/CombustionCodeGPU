@@ -5,12 +5,13 @@
 #include "DParameter.h"
 #include "Constants.h"
 #include "Thermo.cuh"
+#include "SST.cuh"
 
 namespace cfd {
 struct DZone;
 
 template<MixtureModel mixture_model, TurbMethod turb_method>
-__global__ void compute_DQ_0(DZone *zone) {
+__global__ void compute_DQ_0(DZone *zone, const DParameter *param) {
   const integer extent[3]{zone->mx, zone->my, zone->mz};
   const integer i = blockDim.x * blockIdx.x + threadIdx.x;
   const integer j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -37,6 +38,15 @@ __global__ void compute_DQ_0(DZone *zone) {
 
   if constexpr (turb_method == TurbMethod::RANS) {
     // switch RANS model, and apply point implicit to treat the turbulent part
+    if (param->turb_implicit == 1) {
+      switch (param->rans_model) {
+        case 1:
+        case 2: //SST
+          SST::implicit_treat_for_dq0(zone, diag, i, j, k);
+          break;
+        default:break;
+      }
+    }
   }
 }
 
@@ -162,6 +172,15 @@ __global__ void DPLUR_inner_iteration(const DParameter *param, DZone *zone) {
 
   if constexpr (turb_method == TurbMethod::RANS) {
     // switch RANS model, and apply point implicit to treat the turbulent part
+    if (param->turb_implicit == 1) {
+      switch (param->rans_model) {
+        case 1:
+        case 2: //SST
+          SST::implicit_treat_for_dqk(zone, diag, i, j, k, dq_total);
+          break;
+        default:break;
+      }
+    }
   }
 }
 
@@ -176,7 +195,7 @@ void DPLUR(const Block &block, const DParameter *param, DZone *d_ptr, DZone *h_p
   const dim3 bpg{(extent[0] - 1) / tpb.x + 1, (extent[1] - 1) / tpb.y + 1, (extent[2] - 1) / tpb.z + 1};
 
   // DQ(0)=DQ/(1+dt*DRho+dt*dS/dQ)
-  compute_DQ_0<mixture_model, turb_method><<<bpg, tpb>>>(d_ptr);
+  compute_DQ_0<mixture_model, turb_method><<<bpg, tpb>>>(d_ptr, param);
   // Take care of all such treatments where n_var is used to decide the memory size,
   // for when flamelet model is used, the data structure should be modified to make the useful data contigous.
   const auto mem_sz = h_ptr->dq.size() * h_ptr->n_var * sizeof(real);
