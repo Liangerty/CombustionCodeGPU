@@ -288,7 +288,7 @@ void Driver<mix_model, turb_method>::steady_simulation() {
       }
     }
     cudaDeviceSynchronize();
-    if (step % output_file == 0) {
+    if (step % output_file == 0 || converged) {
       output.print_field(step);
       post_process();
     }

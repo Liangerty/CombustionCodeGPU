@@ -55,5 +55,7 @@ void wall_friction_heatflux_2d(const Mesh &mesh, const std::vector<cfd::Field<mi
     }
     f.close();
   }
+  cudaFree(cf);
+  cudaFree(qw);
 }
 }

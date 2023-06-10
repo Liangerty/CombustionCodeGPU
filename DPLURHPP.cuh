@@ -114,43 +114,56 @@ __global__ void DPLUR_inner_iteration(const DParameter *param, DZone *zone) {
   const real dt_local = zone->dt_local(i, j, k);
   constexpr integer n_var_max = 5 + MAX_SPEC_NUMBER + 2; // 5+n_spec+n_turb(n_turb<=2)
   real convJacTimesDq[n_var_max], dq_total[n_var_max];
+  memset(dq_total, 0, n_var_max * sizeof(real));
 
   const integer n_var{zone->n_var};
   const auto &inviscid_spectral_radius = zone->inv_spectr_rad;
   integer ii{i - 1}, jj{j - 1}, kk{k - 1};
-  compute_jacobian_times_dq<mixture_model>(param, zone, ii, j, k, 0, inviscid_spectral_radius(ii, j, k)[0],
-                                           convJacTimesDq);
-  for (integer l = 0; l < n_var; ++l) {
-    dq_total[l] = 0.5 * convJacTimesDq[l];
+  if (i > 0) {
+    compute_jacobian_times_dq<mixture_model>(param, zone, ii, j, k, 0, inviscid_spectral_radius(ii, j, k)[0],
+                                             convJacTimesDq);
+    for (integer l = 0; l < n_var; ++l) {
+      dq_total[l] = 0.5 * convJacTimesDq[l];
+    }
   }
-  compute_jacobian_times_dq<mixture_model>(param, zone, i, jj, k, 1, inviscid_spectral_radius(i, jj, k)[1],
-                                           convJacTimesDq);
-  for (integer l = 0; l < n_var; ++l) {
-    dq_total[l] += 0.5 * convJacTimesDq[l];
+  if (j > 0) {
+    compute_jacobian_times_dq<mixture_model>(param, zone, i, jj, k, 1, inviscid_spectral_radius(i, jj, k)[1],
+                                             convJacTimesDq);
+    for (integer l = 0; l < n_var; ++l) {
+      dq_total[l] += 0.5 * convJacTimesDq[l];
+    }
   }
-  compute_jacobian_times_dq<mixture_model>(param, zone, i, j, kk, 2, inviscid_spectral_radius(i, j, kk)[2],
-                                           convJacTimesDq);
-  for (integer l = 0; l < n_var; ++l) {
-    dq_total[l] += 0.5 * convJacTimesDq[l];
+  if (k > 0) {
+    compute_jacobian_times_dq<mixture_model>(param, zone, i, j, kk, 2, inviscid_spectral_radius(i, j, kk)[2],
+                                             convJacTimesDq);
+    for (integer l = 0; l < n_var; ++l) {
+      dq_total[l] += 0.5 * convJacTimesDq[l];
+    }
   }
 
-  ii = i + 1;
-  jj = j + 1;
-  kk = k + 1;
-  compute_jacobian_times_dq<mixture_model>(param, zone, ii, j, k, 0, -inviscid_spectral_radius(ii, j, k)[0],
-                                           convJacTimesDq);
-  for (integer l = 0; l < n_var; ++l) {
-    dq_total[l] -= 0.5 * convJacTimesDq[l];
+  if (i != extent[0] - 1) {
+    ii = i + 1;
+    compute_jacobian_times_dq<mixture_model>(param, zone, ii, j, k, 0, -inviscid_spectral_radius(ii, j, k)[0],
+                                             convJacTimesDq);
+    for (integer l = 0; l < n_var; ++l) {
+      dq_total[l] -= 0.5 * convJacTimesDq[l];
+    }
   }
-  compute_jacobian_times_dq<mixture_model>(param, zone, i, jj, k, 1, -inviscid_spectral_radius(i, jj, k)[1],
-                                           convJacTimesDq);
-  for (integer l = 0; l < n_var; ++l) {
-    dq_total[l] -= 0.5 * convJacTimesDq[l];
+  if (j != extent[1] - 1) {
+    jj = j + 1;
+    compute_jacobian_times_dq<mixture_model>(param, zone, i, jj, k, 1, -inviscid_spectral_radius(i, jj, k)[1],
+                                             convJacTimesDq);
+    for (integer l = 0; l < n_var; ++l) {
+      dq_total[l] -= 0.5 * convJacTimesDq[l];
+    }
   }
-  compute_jacobian_times_dq<mixture_model>(param, zone, i, j, kk, 2, -inviscid_spectral_radius(i, j, kk)[2],
-                                           convJacTimesDq);
-  for (integer l = 0; l < n_var; ++l) {
-    dq_total[l] -= 0.5 * convJacTimesDq[l];
+  if (k != extent[2] - 1) {
+    kk = k + 1;
+    compute_jacobian_times_dq<mixture_model>(param, zone, i, j, kk, 2, -inviscid_spectral_radius(i, j, kk)[2],
+                                             convJacTimesDq);
+    for (integer l = 0; l < n_var; ++l) {
+      dq_total[l] -= 0.5 * convJacTimesDq[l];
+    }
   }
 
   const auto &spect_rad = inviscid_spectral_radius(i, j, k);

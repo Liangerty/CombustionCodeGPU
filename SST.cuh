@@ -34,6 +34,10 @@ __device__ void compute_mut(cfd::DZone *zone, integer i, integer j, integer k, r
 
 __device__ void compute_source_and_mut(cfd::DZone *zone, integer i, integer j, integer k, DParameter *param);
 
+// Warning: There too many arguments passes here, which may degrade the performance compared to previous inline version.
+// However, this makes the code more compact and easier for later models to be added on.
+// We may investigate how we can accelerate this without sacrificing the compactness of the code later.
+// E.g., maybe some variables can be put on shared memory? Which kind of memory can be reached with the called device kernel?
 __device__ void
 compute_fv_2nd_order(DZone *zone, real *fv, DParameter *param, integer i, integer j, integer k, real xi_x, real xi_y,
                      real xi_z, real eta_x, real eta_y, real eta_z, real zeta_x, real zeta_y, real zeta_z, real mul,
