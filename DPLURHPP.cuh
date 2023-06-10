@@ -46,6 +46,15 @@ __global__ void compute_DQ_0(DZone *zone, const DParameter *param) {
           break;
         default:break;
       }
+    } else {
+      switch (param->rans_model) {
+        case 1:
+        case 2: //SST
+          dq(i, j, k, n_spec + 5) /= diag;
+          dq(i, j, k, n_spec + 6) /= diag;
+          break;
+        default:break;
+      }
     }
   }
 }
@@ -123,7 +132,7 @@ __global__ void DPLUR_inner_iteration(const DParameter *param, DZone *zone) {
     compute_jacobian_times_dq<mixture_model>(param, zone, ii, j, k, 0, inviscid_spectral_radius(ii, j, k)[0],
                                              convJacTimesDq);
     for (integer l = 0; l < n_var; ++l) {
-      dq_total[l] = 0.5 * convJacTimesDq[l];
+      dq_total[l] += 0.5 * convJacTimesDq[l];
     }
   }
   if (j > 0) {
@@ -190,6 +199,15 @@ __global__ void DPLUR_inner_iteration(const DParameter *param, DZone *zone) {
         case 1:
         case 2: //SST
           SST::implicit_treat_for_dqk(zone, diag, i, j, k, dq_total);
+          break;
+        default:break;
+      }
+    } else {
+      switch (param->rans_model) {
+        case 1:
+        case 2: //SST
+          dqk(i, j, k, n_spec + 5) = dq0(i, j, k, n_spec + 5) + dt_local * dq_total[5 + n_spec] / diag;
+          dqk(i, j, k, n_spec + 6) = dq0(i, j, k, n_spec + 6) + dt_local * dq_total[6 + n_spec] / diag;
           break;
         default:break;
       }
