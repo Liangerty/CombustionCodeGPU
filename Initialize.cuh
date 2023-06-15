@@ -135,7 +135,7 @@ read_flowfield(cfd::Parameter &parameter, const cfd::Mesh &mesh, std::vector<Fie
   // The first one tells if species info exists, if exists (1), else, (0).
   // The 2nd one tells if turbulent var exists, if 0 (compute from laminar), 1(From SA), 2(From SST)
   std::array old_data_info{0, 0};//,0
-  auto index_order = cfd::identify_variable_labels<mix_model, turb_method>(parameter,var_name, species,
+  auto index_order = cfd::identify_variable_labels<mix_model, turb_method>(parameter, var_name, species,
                                                                            old_data_info);
   const integer n_spec{species.n_spec};
   const integer n_turb{parameter.get_int("n_turb")};
@@ -364,7 +364,7 @@ identify_variable_labels(cfd::Parameter &parameter, std::vector<std::string> &va
       }
       if constexpr (turb_method == TurbMethod::RANS) {
         // We expect to find some RANS variables. If not found, old_data_info[1] will remain 0.
-        if (n == "K") { // turbulent kinetic energy
+        if (n == "K" || n == "TKE") { // turbulent kinetic energy
           if (n_turb == 2) {
             l = 6 + n_spec;
           }

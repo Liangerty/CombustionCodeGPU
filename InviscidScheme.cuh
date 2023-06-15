@@ -30,6 +30,8 @@ reconstruction(real *pv, real *pv_l, real *pv_r, const integer idx_shared, DZone
   switch (param->reconstruction) {
     case 2:MUSCL_reconstruct(pv, pv_l, pv_r, idx_shared, n_var, param->limiter);
       break;
+    case 3:NND2_reconstruct(pv, pv_l, pv_r, idx_shared, n_var, param->limiter);
+      break;
     default:first_order_reconstruct(pv, pv_l, pv_r, idx_shared, n_var);
   }
   real el = 0.5 * (pv_l[1] * pv_l[1] + pv_l[2] * pv_l[2] + pv_l[3] * pv_l[3]);
@@ -69,6 +71,8 @@ reconstruction(real *pv, real *pv_l, real *pv_r,
   const auto n_var = zone->n_var;
   switch (param->reconstruction) {
     case 2:MUSCL_reconstruct(pv, pv_l, pv_r, idx_shared, n_var, param->limiter);
+      break;
+    case 3:NND2_reconstruct(pv, pv_l, pv_r, idx_shared, n_var, param->limiter);
       break;
     default:first_order_reconstruct(pv, pv_l, pv_r, idx_shared, n_var);
   }

@@ -46,7 +46,6 @@ __device__ void compute_mut(cfd::DZone *zone, integer i, integer j, integer k, r
   const real dy = zone->wall_distance(i, j, k);
   if (dy > 1e-25) {
     const real param1 = 2 * std::sqrt(tke) / (0.09 * omega * dy);
-    const real temperature{zone->bv(i, j, k, 5)};
     const real param2 = 500 * mul / (density * dy * dy * omega);
     const real arg2 = max(param1, param2);
     f2 = std::tanh(arg2 * arg2);
@@ -159,8 +158,8 @@ __device__ void compute_source_and_mut(cfd::DZone *zone, integer i, integer j, i
     const real divU2 = divU * divU;
 
     const real prod_k =
-        mut * (2 * (u_x * u_x + v_y * v_y + w_z * w_z) - 2 / 3 * divU2 + (u_y + v_x) * (u_y + v_x) +
-               (u_z + w_x) * (u_z + w_x) + (v_z + w_y) * (v_z + w_y)) - 2 / 3 * rhoK * divU;
+        mut * (2 * (u_x * u_x + v_y * v_y + w_z * w_z) - 2.0 / 3 * divU2 + (u_y + v_x) * (u_y + v_x) +
+               (u_z + w_x) * (u_z + w_x) + (v_z + w_y) * (v_z + w_y)) - 2.0 / 3 * rhoK * divU;
     const real diss_k = SST::beta_star * rhoK * omega;
     const real jac = zone->jac(i, j, k);
     auto &dq = zone->dq;

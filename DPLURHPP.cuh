@@ -120,7 +120,6 @@ __global__ void DPLUR_inner_iteration(const DParameter *param, DZone *zone) {
   const integer k = blockDim.z * blockIdx.z + threadIdx.z;
   if (i >= extent[0] || j >= extent[1] || k >= extent[2]) return;
 
-  const real dt_local = zone->dt_local(i, j, k);
   constexpr integer n_var_max = 5 + MAX_SPEC_NUMBER + 2; // 5+n_spec+n_turb(n_turb<=2)
   real convJacTimesDq[n_var_max], dq_total[n_var_max];
   memset(dq_total, 0, n_var_max * sizeof(real));
@@ -175,6 +174,7 @@ __global__ void DPLUR_inner_iteration(const DParameter *param, DZone *zone) {
     }
   }
 
+  const real dt_local = zone->dt_local(i, j, k);
   const auto &spect_rad = inviscid_spectral_radius(i, j, k);
   const real diag = 1 + dt_local * (spect_rad[0] + spect_rad[1] + spect_rad[2]);
   auto &dqk = zone->dqk;
