@@ -251,7 +251,7 @@ void Driver<mix_model, turb_method>::steady_simulation() {
       compute_viscous_flux<mix_model, turb_method>(mesh[b], field[b].d_ptr, param, n_var);
 
       // compute local time step
-      local_time_step<mix_model><<<bpg[b], tpb>>>(field[b].d_ptr, param);
+      local_time_step<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
       // implicit treatment if needed
       implicit_treatment<mix_model, turb_method>(mesh[b], param, field[b].d_ptr, parameter, field[b].h_ptr);
 

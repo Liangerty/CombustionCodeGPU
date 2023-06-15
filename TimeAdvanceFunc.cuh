@@ -10,13 +10,13 @@ struct DZone;
 
 __global__ void store_last_step(DZone *zone);
 
-template<MixtureModel mixture>
+template<MixtureModel mixture, TurbMethod turb_method>
 __global__ void local_time_step(cfd::DZone *zone, DParameter *param);
 
 __global__ void compute_square_of_dbv(DZone *zone);
 }
 
-template<MixtureModel mixture>
+template<MixtureModel mixture, TurbMethod turb_method>
 __global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param) {
   const integer extent[3]{zone->mx, zone->my, zone->mz};
   const integer i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -53,8 +53,11 @@ __global__ void cfd::local_time_step(cfd::DZone *zone, cfd::DParameter *param) {
   if constexpr (mixture != MixtureModel::Air) {
     gamma = zone->gamma(i, j, k);
   }
-  real coeff_1 = max(gamma, 4.0 / 3.0);
-  const real coeff_2 = zone->mul(i, j, k) / bv(i, j, k, 0) / param->Pr;
+  real coeff_1 = max(gamma, 4.0 / 3.0) / bv(i, j, k, 0);
+  real coeff_2 = zone->mul(i, j, k) / param->Pr;
+  if constexpr (turb_method == TurbMethod::RANS) {
+    coeff_2 += zone->mut(i, j, k) / param->Prt;
+  }
   real spectral_radius_viscous = grad_xi * grad_xi + grad_eta * grad_eta;
   if (dim == 3) {
     spectral_radius_viscous += grad_zeta * grad_zeta;
