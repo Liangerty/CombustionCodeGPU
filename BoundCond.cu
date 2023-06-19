@@ -386,7 +386,7 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
 
   const integer inner_idx[3]{i - dir[0], j - dir[1], k - dir[2]};
 
-  auto &metric = zone->metric(inner_idx[0], inner_idx[1], inner_idx[2]);
+  auto metric = zone->metric(inner_idx[0], inner_idx[1], inner_idx[2]);
   real k_x{metric(face + 1, 1)}, k_y{metric(face + 1, 2)}, k_z{metric(face + 1, 3)};
   real k_magnitude = sqrt(k_x * k_x + k_y * k_y + k_z * k_z);
   k_x /= k_magnitude;
@@ -403,6 +403,7 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
   bv(i, j, k, 1) = u_t;
   bv(i, j, k, 2) = v_t;
   bv(i, j, k, 3) = w_t;
+  zone->vel(i,j,k)=std::sqrt(u_t*u_t+v_t*v_t+w_t*w_t);
   // The gradient of pressure, density, and scalars should also be zero.
   bv(i, j, k, 0) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 0);
   bv(i, j, k, 4) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 4);
@@ -445,8 +446,9 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
     auto &u{bv(ii, ij, ik, 1)}, v{bv(ii, ij, ik, 2)}, w{bv(ii, ij, ik, 3)};
     u_k = k_x * u + k_y * v + k_z * w;
     bv(gi, gj, gk, 1) = u - 2 * u_k * k_x;
-    bv(gi, gj, gk, 1) = v - 2 * u_k * k_y;
+    bv(gi, gj, gk, 2) = v - 2 * u_k * k_y;
     bv(gi, gj, gk, 3) = w - 2 * u_k * k_z;
+    zone->vel(gi, gj, gk)=std::sqrt(bv(gi, gj, gk, 1)*bv(gi, gj, gk, 1)+bv(gi, gj, gk, 2)*bv(gi, gj, gk, 2)+bv(gi, gj, gk, 3)*bv(gi, gj, gk, 3));
     bv(gi, gj, gk, 4) = bv(ii, ij, ik, 4);
     bv(gi, gj, gk, 5) = bv(ii, ij, ik, 5);
     for (integer l = 0; l < zone->n_scal; ++l) {
