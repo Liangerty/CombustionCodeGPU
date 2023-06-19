@@ -351,7 +351,7 @@ void count_boundary_of_type_bc(const std::vector<Boundary> &boundary, integer n_
     }
   }
   if (blk_idx < n_block - 1) {
-    sep[blk_idx + 1] = n;
+    sep[blk_idx + 1] = n + sep[blk_idx];
   }
 }
 
@@ -403,7 +403,7 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
   bv(i, j, k, 1) = u_t;
   bv(i, j, k, 2) = v_t;
   bv(i, j, k, 3) = w_t;
-  zone->vel(i,j,k)=std::sqrt(u_t*u_t+v_t*v_t+w_t*w_t);
+  zone->vel(i, j, k) = std::sqrt(u_t * u_t + v_t * v_t + w_t * w_t);
   // The gradient of pressure, density, and scalars should also be zero.
   bv(i, j, k, 0) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 0);
   bv(i, j, k, 4) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 4);
@@ -448,7 +448,8 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
     bv(gi, gj, gk, 1) = u - 2 * u_k * k_x;
     bv(gi, gj, gk, 2) = v - 2 * u_k * k_y;
     bv(gi, gj, gk, 3) = w - 2 * u_k * k_z;
-    zone->vel(gi, gj, gk)=std::sqrt(bv(gi, gj, gk, 1)*bv(gi, gj, gk, 1)+bv(gi, gj, gk, 2)*bv(gi, gj, gk, 2)+bv(gi, gj, gk, 3)*bv(gi, gj, gk, 3));
+    zone->vel(gi, gj, gk) = std::sqrt(bv(gi, gj, gk, 1) * bv(gi, gj, gk, 1) + bv(gi, gj, gk, 2) * bv(gi, gj, gk, 2) +
+                                      bv(gi, gj, gk, 3) * bv(gi, gj, gk, 3));
     bv(gi, gj, gk, 4) = bv(ii, ij, ik, 4);
     bv(gi, gj, gk, 5) = bv(ii, ij, ik, 5);
     for (integer l = 0; l < zone->n_scal; ++l) {
