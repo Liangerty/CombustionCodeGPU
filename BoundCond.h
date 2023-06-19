@@ -47,11 +47,17 @@ struct Outflow {
   integer label = 6;
 };
 
+struct Symmetry {
+  explicit Symmetry(integer type_label);
+
+  integer label = 3;
+};
+
 // Below are implementations of above functions
 template<MixtureModel mix_model, TurbMethod turb_method>
 Inflow<mix_model, turb_method>::Inflow(const std::string &inflow_name, Species &spec, Parameter &parameter) {
-  auto& info=parameter.get_struct(inflow_name);
-  label=std::get<integer>(info.at("label"));
+  auto &info = parameter.get_struct(inflow_name);
+  label = std::get<integer>(info.at("label"));
   // In default, the mach number, pressure and temperature should be given.
   // If other combinations are given, then implement it later.
   // Currently, 2 combinations are achieved. One is to give (mach, pressure,
@@ -135,7 +141,7 @@ Inflow<mix_model, turb_method>::Inflow(const std::string &inflow_name, Species &
   }
 
   // This should be re-considered later
-  if (inflow_name=="freestream"){
+  if (inflow_name == "freestream") {
     parameter.update_parameter("rho_inf", density);
     parameter.update_parameter("v_inf", velocity);
   }
