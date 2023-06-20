@@ -309,6 +309,25 @@ void DBoundCond<mix_model, turb_method>::link_bc_to_boundaries(Mesh &mesh,
     link_boundary_and_condition(mesh[i].boundary, inflow_info, n_inflow, i_inflow, i);
     link_boundary_and_condition(mesh[i].boundary, outflow_info, n_outflow, i_outflow, i);
   }
+  for (auto i = 0; i < n_block; i++) {
+    for (size_t l = 0; l < n_wall; l++) {
+      const auto nb = wall_info[l].n_boundary;
+      for (size_t m = 0; m < nb; m++) {
+        auto i_zone = wall_info[l].boundary[m].x;
+        if (i_zone != i) {
+          continue;
+        }
+        auto &b = mesh[i].boundary[wall_info[l].boundary[m].y];
+        for (int q = 0; q < 3; ++q) {
+          if (q == b.face) continue;
+          b.range_start[q] += ngg;
+          b.range_end[q] -= ngg;
+        }
+      }
+    }
+    cudaMemcpy(field[i].h_ptr->boundary, mesh[i].boundary.data(), mesh[i].boundary.size() * sizeof(Boundary),
+               cudaMemcpyHostToDevice);
+  }
   delete[]i_bcs;
   printf("Finish setting up boundary conditions.\n");
 }
@@ -386,7 +405,8 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
 
   const integer inner_idx[3]{i - dir[0], j - dir[1], k - dir[2]};
 
-  auto metric = zone->metric(inner_idx[0], inner_idx[1], inner_idx[2]);
+//  auto metric = zone->metric(inner_idx[0], inner_idx[1], inner_idx[2]);
+  auto metric = zone->metric(i,j,k);
   real k_x{metric(face + 1, 1)}, k_y{metric(face + 1, 2)}, k_z{metric(face + 1, 3)};
   real k_magnitude = sqrt(k_x * k_x + k_y * k_y + k_z * k_z);
   k_x /= k_magnitude;
@@ -434,14 +454,14 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
 
     bv(gi, gj, gk, 0) = bv(ii, ij, ik, 0);
 
-    metric = zone->metric(ii, ij, ik);
-    k_x = metric(face + 1, 1);
-    k_y = metric(face + 1, 2);
-    k_z = metric(face + 1, 3);
-    k_magnitude = sqrt(k_x * k_x + k_y * k_y + k_z * k_z);
-    k_x /= k_magnitude;
-    k_y /= k_magnitude;
-    k_z /= k_magnitude;
+//    metric = zone->metric(ii, ij, ik);
+//    k_x = metric(face + 1, 1);
+//    k_y = metric(face + 1, 2);
+//    k_z = metric(face + 1, 3);
+//    k_magnitude = sqrt(k_x * k_x + k_y * k_y + k_z * k_z);
+//    k_x /= k_magnitude;
+//    k_y /= k_magnitude;
+//    k_z /= k_magnitude;
 
     auto &u{bv(ii, ij, ik, 1)}, v{bv(ii, ij, ik, 2)}, w{bv(ii, ij, ik, 3)};
     u_k = k_x * u + k_y * v + k_z * w;
