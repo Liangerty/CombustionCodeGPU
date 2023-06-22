@@ -479,7 +479,7 @@ __device__ void compute_hv_2nd_order(const integer *idx, DZone *zone, real *hv, 
     if (param->rans_model == 2) {
       // SST
       const real twoThirdrhoKm =
-          -2 / 3 * 0.5 * (zone->cv(i, j, k, zone->n_spec + 5) + zone->cv(i, j, k + 1, zone->n_spec + 5));
+          -2.0 / 3 * 0.5 * (zone->cv(i, j, k, zone->n_spec + 5) + zone->cv(i, j, k + 1, zone->n_spec + 5));
       tau_xx += twoThirdrhoKm;
       tau_yy += twoThirdrhoKm;
       tau_zz += twoThirdrhoKm;

@@ -275,7 +275,8 @@ void Driver<mix_model, turb_method>::steady_simulation() {
     // update physical properties such as Mach number, transport coefficients et, al.
     for (auto b = 0; b < n_block; ++b) {
       integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
-      dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
+      dim3 BPG{(mx + 1) / tpb.x + 1, (my + 1) / tpb.y + 1, (mz + 1) / tpb.z + 1};
+//      dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
       update_physical_properties<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
     }
 
@@ -290,7 +291,7 @@ void Driver<mix_model, turb_method>::steady_simulation() {
     cudaDeviceSynchronize();
     if (step % output_file == 0 || converged) {
       output.print_field(step);
-      post_process();
+//      post_process();
     }
   }
   delete[] bpg;

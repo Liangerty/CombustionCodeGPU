@@ -171,6 +171,7 @@ void cfd::Field<mix_model, turb_method>::copy_data_from_device() {
   cudaMemcpy(bv.data(), h_ptr->bv.data(), 6 * size * sizeof(real), cudaMemcpyDeviceToHost);
   cudaMemcpy(ov.data(), h_ptr->mach.data(), size * sizeof(real), cudaMemcpyDeviceToHost);
   if constexpr (turb_method == TurbMethod::RANS) {
+//    cudaMemcpy(ov[1], h_ptr->wall_distance.data(), size * sizeof(real), cudaMemcpyDeviceToHost);
     cudaMemcpy(ov[1], h_ptr->mut.data(), size * sizeof(real), cudaMemcpyDeviceToHost);
   }
   cudaMemcpy(sv.data(), h_ptr->sv.data(), h_ptr->n_scal * size * sizeof(real), cudaMemcpyDeviceToHost);
