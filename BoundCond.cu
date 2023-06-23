@@ -548,26 +548,26 @@ __global__ void apply_inflow(DZone *zone, Inflow<mix_model, turb_method> *inflow
   const real w = inflow->w;
   const auto *i_sv = inflow->sv;
 
-  bv(i, j, k, 0) = density;
-  bv(i, j, k, 1) = u;
-  bv(i, j, k, 2) = v;
-  bv(i, j, k, 3) = w;
-  bv(i, j, k, 4) = inflow->pressure;
-  bv(i, j, k, 5) = inflow->temperature;
-  for (int l = 0; l < n_scalar; ++l) {
-    sv(i, j, k, l) = i_sv[l];
-    if constexpr (mix_model != MixtureModel::FL) {
-      cv(i, j, k, 5 + l) = density * i_sv[l];
-    }
-  }
-  cv(i, j, k, 0) = density;
-  cv(i, j, k, 1) = density * u;
-  cv(i, j, k, 2) = density * v;
-  cv(i, j, k, 3) = density * w;
-  compute_total_energy<mix_model>(i, j, k, zone, param);
-  if constexpr (turb_method == TurbMethod::RANS) {
-    zone->mut(i, j, k) = inflow->mut;
-  }
+//  bv(i, j, k, 0) = density;
+//  bv(i, j, k, 1) = u;
+//  bv(i, j, k, 2) = v;
+//  bv(i, j, k, 3) = w;
+//  bv(i, j, k, 4) = inflow->pressure;
+//  bv(i, j, k, 5) = inflow->temperature;
+//  for (int l = 0; l < n_scalar; ++l) {
+//    sv(i, j, k, l) = i_sv[l];
+//    if constexpr (mix_model != MixtureModel::FL) {
+//      cv(i, j, k, 5 + l) = density * i_sv[l];
+//    }
+//  }
+//  cv(i, j, k, 0) = density;
+//  cv(i, j, k, 1) = density * u;
+//  cv(i, j, k, 2) = density * v;
+//  cv(i, j, k, 3) = density * w;
+//  compute_total_energy<mix_model>(i, j, k, zone, param);
+//  if constexpr (turb_method == TurbMethod::RANS) {
+//    zone->mut(i, j, k) = inflow->mut;
+//  }
 
   for (integer g = 1; g <= ngg; g++) {
     const integer gi{i + g * dir[0]}, gj{j + g * dir[1]}, gk{k + g * dir[2]};
