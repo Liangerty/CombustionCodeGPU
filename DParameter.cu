@@ -86,14 +86,10 @@ cfd::DParameter::DParameter(cfd::Parameter &parameter, Species &species, Reactio
   // pressure limits
   limit_flow.ll[4] = 1e-6 * parameter.get_real("p_inf");
   limit_flow.ul[4] = 1e+3 * parameter.get_real("p_inf");
-  for (integer l = 0; l < n_spec; ++l) {
-    // species mass fraction max value is limited to 1.
-    limit_flow.ul[l + 5] = 1;
-  }
   if (rans_model == 2) {
     // SST model
-    limit_flow.ul[5 + n_spec] = std::numeric_limits<real>::max();
-    limit_flow.ul[6 + n_spec] = std::numeric_limits<real>::max();
+    limit_flow.ul[5] = std::numeric_limits<real>::max();
+    limit_flow.ul[6] = std::numeric_limits<real>::max();
   }
   auto &sv_inf{parameter.get_real_array("sv_inf")};
   for (integer l = 0; l < n_scalar; ++l) {

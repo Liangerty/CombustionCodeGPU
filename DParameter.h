@@ -45,10 +45,10 @@ private:
   struct LimitFlow {
     // ll for lower limit, ul for upper limit.
 
-    static constexpr integer max_n_var = 5 + MAX_SPEC_NUMBER + 2;
+    static constexpr integer max_n_var = 5 + 2;// + MAX_SPEC_NUMBER
     real ll[max_n_var];
     real ul[max_n_var];
-    real sv_inf[MAX_SPEC_NUMBER+2];
+    real sv_inf[MAX_SPEC_NUMBER + 2];
 
 //    /*static */real dll = 1e-6; // density lower limit
 //    /*static */real dul = 1e+3; // density upper limit
