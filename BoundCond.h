@@ -144,6 +144,12 @@ Inflow<mix_model, turb_method>::Inflow(const std::string &inflow_name, Species &
   if (inflow_name == "freestream") {
     parameter.update_parameter("rho_inf", density);
     parameter.update_parameter("v_inf", velocity);
+    parameter.update_parameter("p_inf", pressure);
+    std::vector<real> sv_inf(n_scalar, 0);
+    for (int l = 0; l < n_scalar; ++l) {
+      sv_inf[l] = sv[l];
+    }
+    parameter.update_parameter("sv_inf", sv_inf);
   }
 }
 

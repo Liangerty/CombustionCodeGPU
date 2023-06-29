@@ -14,6 +14,8 @@ template<MixtureModel mixture, TurbMethod turb_method>
 __global__ void local_time_step(cfd::DZone *zone, DParameter *param);
 
 __global__ void compute_square_of_dbv(DZone *zone);
+
+__global__ void limit_flow(cfd::DZone *zone, cfd::DParameter *param, integer blk_id);
 }
 
 template<MixtureModel mixture, TurbMethod turb_method>

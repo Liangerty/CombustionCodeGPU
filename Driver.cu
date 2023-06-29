@@ -49,13 +49,13 @@ Driver<mix_model, turb_method>::Driver(Parameter &parameter, Mesh &mesh_):myid(p
   }
 
 #ifdef GPU
-  DParameter d_param(parameter, spec, reac);
-  cudaMalloc(&param, sizeof(DParameter));
-  cudaMemcpy(param, &d_param, sizeof(DParameter), cudaMemcpyHostToDevice);
   for (integer blk = 0; blk < mesh.n_block; ++blk) {
     field[blk].setup_device_memory(parameter);
   }
   bound_cond.initialize_bc_on_GPU(mesh_, field, spec, parameter);
+  DParameter d_param(parameter, spec, reac);
+  cudaMalloc(&param, sizeof(DParameter));
+  cudaMemcpy(param, &d_param, sizeof(DParameter), cudaMemcpyHostToDevice);
 #endif
 }
 
@@ -257,6 +257,9 @@ void Driver<mix_model, turb_method>::steady_simulation() {
 
       // update conservative and basic variables
       update_cv_and_bv<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
+
+      // limit unphysical values computed by the program
+      limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr,param,b);
 
       // apply boundary conditions
       bound_cond.apply_boundary_conditions(mesh[b], field[b], param);

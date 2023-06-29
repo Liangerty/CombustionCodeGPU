@@ -12,7 +12,7 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
 endif()
 
 #add_compile_definitions(MULTISPECIES=1)
-add_compile_definitions(MAX_SPEC_NUMBER=55)
+add_compile_definitions(MAX_SPEC_NUMBER=20)
 add_compile_definitions(GPU)
 
 project(2_CLionGPU CUDA CXX)
