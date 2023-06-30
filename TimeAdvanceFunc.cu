@@ -60,7 +60,7 @@ __global__ void cfd::limit_flow(cfd::DZone *zone, cfd::DParameter *param, intege
   auto ul = param->limit_flow.ul;
   bool unphysical{false};
   const integer n_var = zone->n_var;
-  for (integer l = 0; l < n_var; ++l) {
+  for (integer l = 0; l < n_var - n_spec; ++l) {
     if (isnan(var[l])) {
       unphysical = true;
       break;
@@ -75,41 +75,44 @@ __global__ void cfd::limit_flow(cfd::DZone *zone, cfd::DParameter *param, intege
     printf("Unphysical values appear in process %d, block %d, i = %d, j = %d, k = %d.\n", param->myid, blk_id, i, j, k);
 
     real updated_var[max_n_var + MAX_SPEC_NUMBER];
-    memset(updated_var, 0, max_n_var * sizeof(real));
+    memset(updated_var, 0, (max_n_var + MAX_SPEC_NUMBER) * sizeof(real));
     integer kn{0};
     // Compute the sum of all "good" points surrounding the "bad" point
     for (integer ka = -1; ka < 2; ++ka) {
       const integer k1{k + ka};
-      if (k1 < 0 || k1 >= mz) return;
+      if (k1 < 0 || k1 >= mz) continue;
       for (integer ja = -1; ja < 2; ++ja) {
         const integer j1{j + ja};
-        if (j1 < 0 || j1 >= my) return;
+        if (j1 < 0 || j1 >= my) continue;
         for (integer ia = -1; ia < 2; ++ia) {
           const integer i1{i + ia};
-          if (i1 < 0 || i1 >= mz)return;
+          if (i1 < 0 || i1 >= mz)continue;
 
           unphysical = false;
-          for (integer l = 0; l < 5; ++l) {
-            const auto value{bv(i1, j1, k1, l)};
-            if (isnan(value) || value < ll[l] || value > ul[l]) {
-              unphysical = true;
-              break;
-            }
-            updated_var[l] += value;
+          if (isnan(bv(i1, j1, k1, 0)) || isnan(bv(i1, j1, k1, 1)) || isnan(bv(i1, j1, k1, 2)) ||
+              isnan(bv(i1, j1, k1, 3)) || isnan(bv(i1, j1, k1, 4)) || bv(i1, j1, k1, 0) < ll[0] ||
+              bv(i1, j1, k1, 1) < ll[1] || bv(i1, j1, k1, 2) < ll[2] || bv(i1, j1, k1, 3) < ll[3] ||
+              bv(i1, j1, k1, 4) < ll[4] || bv(i1, j1, k1, 0) > ul[0] || bv(i1, j1, k1, 1) > ul[1] ||
+              bv(i1, j1, k1, 2) > ul[2] || bv(i1, j1, k1, 3) > ul[3] || bv(i1, j1, k1, 4) > ul[4]) {
+            continue;
           }
-          if (unphysical) continue;
-
           for (integer l = 0; l < n_turb; ++l) {
             const auto value{sv(i1, j1, k1, l + n_spec)};
             if (isnan(value) || value < ll[l + 5] || value > ul[l + 5]) {
               unphysical = true;
               break;
             }
-            updated_var[l + 5 + n_spec] += value;
           }
+
           if (unphysical) continue;
 
-          for (integer l = 0; l < n_spec; ++l) {
+          updated_var[0] += bv(i1, j1, k1, 0);
+          updated_var[1] += bv(i1, j1, k1, 1);
+          updated_var[2] += bv(i1, j1, k1, 2);
+          updated_var[3] += bv(i1, j1, k1, 3);
+          updated_var[4] += bv(i1, j1, k1, 4);
+
+          for (integer l = 0; l < zone->n_scal; ++l) {
             updated_var[l + 5] += sv(i1, j1, k1, l);
           }
 
@@ -120,8 +123,9 @@ __global__ void cfd::limit_flow(cfd::DZone *zone, cfd::DParameter *param, intege
 
     // Compute the average of the surrounding points
     if (kn > 0) {
+      const real kn_inv{1.0 / kn};
       for (integer l = 0; l < n_var; ++l) {
-        updated_var[l] /= kn;
+        updated_var[l] *= kn_inv;
       }
     } else {
       // The surrounding points are all "bad"
