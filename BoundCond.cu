@@ -84,6 +84,7 @@ register_inflow(Inflow<mix_model, turb_method> *&inflows, integer n_bc, std::vec
       bc_info[i].label = bc_label;
       Inflow<mix_model, turb_method> inflow(bc_name, species, parameter);
       inflow.copy_to_gpu(&(inflows[i]), species, parameter);
+      break;
     }
   }
 }
@@ -119,27 +120,6 @@ DBoundCond<mix_model, turb_method>::apply_boundary_conditions(const Block &block
     }
   }
 
-  // 3 - symmetry
-  for (size_t l = 0; l < n_symmetry; l++) {
-    const auto nb = symmetry_info[l].n_boundary;
-    for (size_t i = 0; i < nb; i++) {
-      auto [i_zone, i_face] = symmetry_info[l].boundary[i];
-      if (i_zone != block.block_id) {
-        continue;
-      }
-      const auto &h_f = block.boundary[i_face];
-      const auto ngg = block.ngg;
-      uint tpb[3], bpg[3];
-      for (size_t j = 0; j < 3; j++) {
-        auto n_point = h_f.range_end[j] - h_f.range_start[j] + 1;
-        tpb[j] = n_point <= (2 * ngg + 1) ? 1 : 16;
-        bpg[j] = (n_point - 1) / tpb[j] + 1;
-      }
-      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-      apply_symmetry<mix_model, turb_method> <<<BPG, TPB>>>(field.d_ptr, i_face);
-    }
-  }
-
   // 5-inflow
   for (size_t l = 0; l < n_inflow; l++) {
     const auto nb = inflow_info[l].n_boundary;
@@ -162,6 +142,25 @@ DBoundCond<mix_model, turb_method>::apply_boundary_conditions(const Block &block
   }
 
   // 3-symmetry
+  for (size_t l = 0; l < n_symmetry; l++) {
+    const auto nb = symmetry_info[l].n_boundary;
+    for (size_t i = 0; i < nb; i++) {
+      auto [i_zone, i_face] = symmetry_info[l].boundary[i];
+      if (i_zone != block.block_id) {
+        continue;
+      }
+      const auto &h_f = block.boundary[i_face];
+      const auto ngg = block.ngg;
+      uint tpb[3], bpg[3];
+      for (size_t j = 0; j < 3; j++) {
+        auto n_point = h_f.range_end[j] - h_f.range_start[j] + 1;
+        tpb[j] = n_point <= (2 * ngg + 1) ? 1 : 16;
+        bpg[j] = (n_point - 1) / tpb[j] + 1;
+      }
+      dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
+      apply_symmetry<mix_model, turb_method> <<<BPG, TPB>>>(field.d_ptr, i_face);
+    }
+  }
 
   // 2 - wall
   for (size_t l = 0; l < n_wall; l++) {

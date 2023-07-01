@@ -83,18 +83,6 @@ void Driver<mix_model, turb_method>::initialize_computation() {
     }
   }
 
-  // First, compute the conservative variables from basic variables
-  for (auto i = 0; i < mesh.n_block; ++i) {
-    integer mx{mesh[i].mx}, my{mesh[i].my}, mz{mesh[i].mz};
-    dim3 bpg{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
-    compute_cv_from_bv<mix_model, turb_method><<<bpg, tpb>>>(field[i].d_ptr, param);
-    if constexpr (turb_method == TurbMethod::RANS) {
-      // We need the wall distance here. And the mut are computed for bc
-      initialize_mut<mix_model><<<bpg, tpb >>>(field[i].d_ptr, param);
-    }
-  }
-  cudaDeviceSynchronize();
-
   // Second, apply boundary conditions to all boundaries, including face communication between faces
   for (integer b = 0; b < mesh.n_block; ++b) {
     bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
@@ -110,6 +98,19 @@ void Driver<mix_model, turb_method>::initialize_computation() {
   if (myid == 0) {
     printf("Finish data transfer.\n");
   }
+
+  // First, compute the conservative variables from basic variables
+  for (auto i = 0; i < mesh.n_block; ++i) {
+    integer mx{mesh[i].mx}, my{mesh[i].my}, mz{mesh[i].mz};
+    dim3 bpg{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
+    compute_cv_from_bv<mix_model, turb_method><<<bpg, tpb>>>(field[i].d_ptr, param);
+    if constexpr (turb_method == TurbMethod::RANS) {
+      // We need the wall distance here. And the mut are computed for bc
+      initialize_mut<mix_model><<<bpg, tpb >>>(field[i].d_ptr, param);
+    }
+  }
+  cudaDeviceSynchronize();
+
 
   for (auto b = 0; b < mesh.n_block; ++b) {
     integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
@@ -369,7 +370,7 @@ real Driver<mix_model, turb_method>::compute_residual(integer step) {
   // Find the maximum error of the 4 errors
   real err_max = res[0];
   for (integer i = 1; i < 4; ++i) {
-    if (res[i] > err_max) {
+    if (std::abs(res[i]) > err_max) {
       err_max = res[i];
     }
   }
