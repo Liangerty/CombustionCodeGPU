@@ -274,12 +274,42 @@ void DBoundCond<mix_model, turb_method>::link_bc_to_boundaries(Mesh &mesh,
                                                                std::vector<Field<mix_model, turb_method>> &field) const {
   const integer n_block{mesh.n_block};
   constexpr integer type_of_bc{4}; // Wall, Symmetry, Inflow, Outflow
-  auto *i_bcs = new integer[n_block * type_of_bc];
-  auto *i_wall = i_bcs;
-  auto *i_symm = &i_wall[n_block];
-  auto *i_inflow = &i_symm[n_block];
-  auto *i_outflow = &i_inflow[n_block];
-  memset(i_bcs, 0, n_block * type_of_bc * sizeof(integer));
+  integer **i_wall = new integer *[n_wall];
+  for (size_t i = 0; i < n_wall; i++) {
+    i_wall[i] = new integer[n_block];
+    for (integer j = 0; j < n_block; j++) {
+      i_wall[i][j] = 0;
+    }
+  }
+  integer **i_symm = new integer *[n_symmetry];
+  for (size_t i = 0; i < n_symmetry; i++) {
+    i_symm[i] = new integer[n_block];
+    for (integer j = 0; j < n_block; j++) {
+      i_symm[i][j] = 0;
+    }
+  }
+  integer **i_inflow = new integer *[n_inflow];
+  for (size_t i = 0; i < n_inflow; i++) {
+    i_inflow[i] = new integer[n_block];
+    for (integer j = 0; j < n_block; j++) {
+      i_inflow[i][j] = 0;
+    }
+  }
+  integer **i_outflow = new integer *[n_outflow];
+  for (size_t i = 0; i < n_outflow; i++) {
+    i_outflow[i] = new integer[n_block];
+    for (integer j = 0; j < n_block; j++) {
+      i_outflow[i][j] = 0;
+    }
+  }
+  //const integer n_block{mesh.n_block};
+  //constexpr integer type_of_bc{4}; // Wall, Symmetry, Inflow, Outflow
+  //auto* i_bcs = new integer[n_block * type_of_bc];
+  //auto* i_wall = i_bcs;
+  //auto* i_symm = &i_wall[n_block];
+  //auto* i_inflow = &i_symm[n_block];
+  //auto* i_outflow = &i_inflow[n_block];
+  //memset(i_bcs, 0, n_block * type_of_bc * sizeof(integer));
 
   // We first count how many faces corresponds to a given boundary condition
   for (integer i = 0; i < n_block; i++) {
@@ -327,7 +357,23 @@ void DBoundCond<mix_model, turb_method>::link_bc_to_boundaries(Mesh &mesh,
     cudaMemcpy(field[i].h_ptr->boundary, mesh[i].boundary.data(), mesh[i].boundary.size() * sizeof(Boundary),
                cudaMemcpyHostToDevice);
   }
-  delete[]i_bcs;
+  for (integer i = 0; i < n_wall; i++) {
+    delete[]i_wall[i];
+  }
+  for (integer i = 0; i < n_symmetry; i++) {
+    delete[]i_symm[i];
+  }
+  for (integer i = 0; i < n_inflow; i++) {
+    delete[]i_inflow[i];
+  }
+  for (integer i = 0; i < n_outflow; i++) {
+    delete[]i_outflow[i];
+  }
+  delete[]i_wall;
+  delete[]i_symm;
+  delete[]i_inflow;
+  delete[]i_outflow;
+  //delete[]i_bcs;
   printf("Finish setting up boundary conditions.\n");
 }
 
@@ -349,7 +395,30 @@ class DBoundCond<MixtureModel::FR, TurbMethod::Laminar>;
 template
 class DBoundCond<MixtureModel::FR, TurbMethod::RANS>;
 
-void count_boundary_of_type_bc(const std::vector<Boundary> &boundary, integer n_bc, integer *sep, integer blk_idx,
+//void count_boundary_of_type_bc(const std::vector<Boundary>& boundary, integer n_bc, integer* sep, integer blk_idx,
+//  integer n_block, BCInfo* bc_info) {
+//  if (n_bc <= 0) {
+//    return;
+//  }
+//
+//  // Count how many faces correspond to the given bc
+//  const auto n_boundary{boundary.size()};
+//  integer n{0};
+//  for (size_t l = 0; l < n_bc; l++) {
+//    integer label = bc_info[l].label; // This means every bc should have a member "label"
+//    for (size_t i = 0; i < n_boundary; i++) {
+//      auto& b = boundary[i];
+//      if (b.type_label == label) {
+//        ++bc_info[l].n_boundary;
+//        ++n;
+//      }
+//    }
+//  }
+//  if (blk_idx < n_block - 1) {
+//    sep[blk_idx + 1] = n + sep[blk_idx];
+//  }
+//}
+void count_boundary_of_type_bc(const std::vector<Boundary> &boundary, integer n_bc, integer **sep, integer blk_idx,
                                integer n_block, BCInfo *bc_info) {
   if (n_bc <= 0) {
     return;
@@ -357,28 +426,47 @@ void count_boundary_of_type_bc(const std::vector<Boundary> &boundary, integer n_
 
   // Count how many faces correspond to the given bc
   const auto n_boundary{boundary.size()};
-  integer n{0};
+  integer *n = new integer[n_bc];
+  memset(n,0,sizeof(integer)*n_bc);
   for (size_t l = 0; l < n_bc; l++) {
     integer label = bc_info[l].label; // This means every bc should have a member "label"
     for (size_t i = 0; i < n_boundary; i++) {
       auto &b = boundary[i];
       if (b.type_label == label) {
         ++bc_info[l].n_boundary;
-        ++n;
+        ++n[l];
       }
     }
   }
   if (blk_idx < n_block - 1) {
-    sep[blk_idx + 1] = n + sep[blk_idx];
+    for (size_t l = 0; l < n_bc; l++) {
+      sep[l][blk_idx + 1] = n[l] + sep[l][blk_idx];
+    }
   }
+  delete[]n;
 }
 
-void link_boundary_and_condition(const std::vector<Boundary> &boundary, BCInfo *bc, integer n_bc, const integer *sep,
+//void link_boundary_and_condition(const std::vector<Boundary>& boundary, BCInfo* bc, integer n_bc, const integer* sep,
+//  integer i_zone) {
+//  const auto n_boundary{boundary.size()};
+//  for (size_t l = 0; l < n_bc; l++) {
+//    integer label = bc[l].label;
+//    int has_read{sep[i_zone]};
+//    for (auto i = 0; i < n_boundary; i++) {
+//      auto& b = boundary[i];
+//      if (b.type_label == label) {
+//        bc[l].boundary[has_read] = make_int2(i_zone, i);
+//        ++has_read;
+//      }
+//    }
+//  }
+//}
+void link_boundary_and_condition(const std::vector<Boundary> &boundary, BCInfo *bc, integer n_bc, integer **sep,
                                  integer i_zone) {
   const auto n_boundary{boundary.size()};
   for (size_t l = 0; l < n_bc; l++) {
     integer label = bc[l].label;
-    int has_read{sep[i_zone]};
+    int has_read{sep[l][i_zone]};
     for (auto i = 0; i < n_boundary; i++) {
       auto &b = boundary[i];
       if (b.type_label == label) {
@@ -405,7 +493,7 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
   const integer inner_idx[3]{i - dir[0], j - dir[1], k - dir[2]};
 
 //  auto metric = zone->metric(inner_idx[0], inner_idx[1], inner_idx[2]);
-  auto metric = zone->metric(i,j,k);
+  auto metric = zone->metric(i, j, k);
   real k_x{metric(face + 1, 1)}, k_y{metric(face + 1, 2)}, k_z{metric(face + 1, 3)};
   real k_magnitude = sqrt(k_x * k_x + k_y * k_y + k_z * k_z);
   k_x /= k_magnitude;
