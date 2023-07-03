@@ -274,28 +274,28 @@ void DBoundCond<mix_model, turb_method>::link_bc_to_boundaries(Mesh &mesh,
                                                                std::vector<Field<mix_model, turb_method>> &field) const {
   const integer n_block{mesh.n_block};
   constexpr integer type_of_bc{4}; // Wall, Symmetry, Inflow, Outflow
-  integer **i_wall = new integer *[n_wall];
+  auto **i_wall = new integer *[n_wall];
   for (size_t i = 0; i < n_wall; i++) {
     i_wall[i] = new integer[n_block];
     for (integer j = 0; j < n_block; j++) {
       i_wall[i][j] = 0;
     }
   }
-  integer **i_symm = new integer *[n_symmetry];
+  auto **i_symm = new integer *[n_symmetry];
   for (size_t i = 0; i < n_symmetry; i++) {
     i_symm[i] = new integer[n_block];
     for (integer j = 0; j < n_block; j++) {
       i_symm[i][j] = 0;
     }
   }
-  integer **i_inflow = new integer *[n_inflow];
+  auto **i_inflow = new integer *[n_inflow];
   for (size_t i = 0; i < n_inflow; i++) {
     i_inflow[i] = new integer[n_block];
     for (integer j = 0; j < n_block; j++) {
       i_inflow[i][j] = 0;
     }
   }
-  integer **i_outflow = new integer *[n_outflow];
+  auto **i_outflow = new integer *[n_outflow];
   for (size_t i = 0; i < n_outflow; i++) {
     i_outflow[i] = new integer[n_block];
     for (integer j = 0; j < n_block; j++) {

@@ -17,7 +17,7 @@ add_compile_definitions(GPU)
 
 project(2_CLionGPU CUDA CXX)
 
-set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND src_file
@@ -30,7 +30,7 @@ list(APPEND src_file
   Limiter.cuh
   main.cu Mesh.h Mesh.cpp
   Output.hpp
-  Parallel.h Parallel.cpp Parameter.h Parameter.cpp PostProcess.h PostProcess.cu
+  Parallel.h Parallel.cpp Parallel.cu Parameter.h Parameter.cpp PostProcess.h PostProcess.cu
   Reconstruction.cu Reconstruction.cuh
   SchemeSelector.cuh SourceTerm.cuh SST.cuh SST.cu
   Transport.cuh Transport.cu TimeAdvanceFunc.cu TimeAdvanceFunc.cuh Thermo.cuh Thermo.cu
