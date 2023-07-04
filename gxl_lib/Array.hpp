@@ -25,10 +25,11 @@ public:
   cudaError_t allocate_memory(int dim1, int dim2, int dim3, int n_ghost = 0);
 
   __device__ T &operator()(const int i, const int j, const int k) {
-    if constexpr (major == Major::ColMajor)
+    if constexpr (major == Major::ColMajor) {
       return val[k * disp1 + j * disp2 + i + dispt];
-    else
+    } else {
       return val[i * disp1 + j * disp2 + k + dispt];
+    }
   }
 
   __device__ const T &operator()(const int i, const int j, const int k) const {
@@ -91,9 +92,9 @@ public:
     }
   }
 
-  T* operator[](int l){
-    static_assert(major==Major::ColMajor);
-    return &val[l*sz];
+  T *operator[](int l) {
+    static_assert(major == Major::ColMajor);
+    return &val[l * sz];
   }
 
   T *data() { return val; }
@@ -237,6 +238,8 @@ public:
   }
 
   void resize(int ni, int nj, int nk, int nl, int ngg, T &&t = T{});
+
+  int n_var() const { return n4; }
 };
 
 template<typename T, Major major>

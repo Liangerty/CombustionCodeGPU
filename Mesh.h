@@ -100,6 +100,7 @@ struct ParallelFace {
    * @loop_order.
    */
   integer loop_dir[3]{1, 1, 1};
+  integer n_point[3]{0, 0, 0};
 };
 
 /**

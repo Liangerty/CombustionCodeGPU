@@ -47,7 +47,6 @@ Driver<mix_model, turb_method>::Driver(Parameter &parameter, Mesh &mesh_):myid(p
     res_scale_in >> res_scale[0] >> res_scale[1] >> res_scale[2] >> res_scale[3];
     res_scale_in.close();
   }
-
 #ifdef GPU
   for (integer blk = 0; blk < mesh.n_block; ++blk) {
     field[blk].setup_device_memory(parameter);
@@ -79,7 +78,7 @@ void Driver<mix_model, turb_method>::initialize_computation() {
     for (auto b = 0; b < mesh.n_block; ++b) {
       const auto mx{mesh[b].mx}, my{mesh[b].my};
       dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, 1};
-      eliminate_k_gradient <<<BPG, tpb >>> (field[b].d_ptr);
+      eliminate_k_gradient <<<BPG, tpb >>>(field[b].d_ptr);
     }
   }
 
@@ -91,13 +90,6 @@ void Driver<mix_model, turb_method>::initialize_computation() {
     printf("Boundary conditions are applied successfully for initialization\n");
   }
 
-  // Third, communicate values between processes
-  data_communication<mix_model, turb_method>(mesh, field);
-  // Currently not implemented, thus the current program can only be used on a single GPU
-
-  if (myid == 0) {
-    printf("Finish data transfer.\n");
-  }
 
   // First, compute the conservative variables from basic variables
   for (auto i = 0; i < mesh.n_block; ++i) {
@@ -110,6 +102,18 @@ void Driver<mix_model, turb_method>::initialize_computation() {
     }
   }
   cudaDeviceSynchronize();
+  // Third, communicate values between processes
+  data_communication<mix_model, turb_method>(mesh, field, parameter, 0);
+  // Currently not implemented, thus the current program can only be used on a single GPU
+
+  if (myid == 0) {
+    printf("Finish data transfer.\n");
+  }
+  cudaDeviceSynchronize();
+//  MPI_Barrier(MPI_COMM_WORLD);
+//  output.print_field(5, 0);
+//  MPI_Barrier(MPI_COMM_WORLD);
+//  MPI_Abort(MPI_COMM_WORLD,1);
 
 
   for (auto b = 0; b < mesh.n_block; ++b) {
@@ -260,13 +264,16 @@ void Driver<mix_model, turb_method>::steady_simulation() {
       update_cv_and_bv<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
 
       // limit unphysical values computed by the program
-      limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr,param,b);
+      limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
 
       // apply boundary conditions
       bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
     }
     // Third, transfer data between and within processes
-    data_communication(mesh, field);
+    data_communication(mesh, field, parameter, step);
+//    for (auto b = 0; b < n_block; ++b){
+//      update_bv<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
+//    }
 
     if (mesh.dimension == 2) {
       for (auto b = 0; b < n_block; ++b) {
@@ -342,6 +349,11 @@ real Driver<mix_model, turb_method>::compute_residual(integer step) {
 
   if (parameter.get_bool("parallel")) {
     // Parallel reduction
+    static std::array<double, 4> res_temp;
+    for (int i = 0; i < 4; ++i) {
+      res_temp[i] = res[i];
+    }
+    MPI_Allreduce(res_temp.data(), res.data(), 4, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
   }
   for (auto &e: res) {
     e = std::sqrt(e / mesh.n_grid_total);
@@ -358,9 +370,11 @@ real Driver<mix_model, turb_method>::compute_residual(integer step) {
     if (!exists(out_dir)) {
       create_directories(out_dir);
     }
-    std::ofstream res_scale_out(out_dir.string() + "/residual_scale.txt");
-    res_scale_out << res_scale[0] << '\n' << res_scale[1] << '\n' << res_scale[2] << '\n' << res_scale[3] << '\n';
-    res_scale_out.close();
+    if (myid==0){
+      std::ofstream res_scale_out(out_dir.string() + "/residual_scale.txt");
+      res_scale_out << res_scale[0] << '\n' << res_scale[1] << '\n' << res_scale[2] << '\n' << res_scale[3] << '\n';
+      res_scale_out.close();
+    }
   }
 
   for (integer i = 0; i < 4; ++i) {

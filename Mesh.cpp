@@ -187,60 +187,58 @@ cfd::ParallelFace::ParallelFace(integer x1, integer x2, integer y1, integer y2,
       flag_receive{flag_r} {}
 
 void cfd::ParallelFace::register_boundary(const integer dim, integer ngg) {
-  if (dim == 3) {
-    for (integer i = 0; i < dim; ++i) {
-      // if start==end, then it is the normal direction
-      if (range_start[i] == range_end[i]) {
-        face = i;
-        // if the same value is 1, it is the small label face, and the normal
-        // points to negative direction
-        if (range_start[i] == 1) direction = -1;
-        range_start[i] -= 1;
-        range_end[i] -= 1;
-        loop_order[0] = i;
-        loop_dir[0] = 0;
-      } else if (range_start[i] > 0) {
-        range_start[i] -= 1;
-        range_end[i] -= 1;
-        loop_order[1] = i;
-        loop_dir[1] = range_start[i] < range_end[i] ? 1 : -1;
-        range_start[i] -= loop_dir[i] * ngg;
-        range_end[i] += loop_dir[i] * ngg;
-      } else {
-        range_start[i] = -range_start[i] - 1;
-        range_end[i] = -range_end[i] - 1;
-        loop_order[2] = i;
-        loop_dir[2] = range_start[i] < range_end[i] ? 1 : -1;
-        range_start[i] -= loop_dir[i] * ngg;
-        range_end[i] += loop_dir[i] * ngg;
-      }
+  for (integer i = 0; i < dim; ++i) {
+    // if start==end, then it is the normal direction
+    if (range_start[i] == range_end[i]) {
+      face = i;
+      // if the same value is 1, it is the small label face, and the normal
+      // points to negative direction
+      if (range_start[i] == 1) direction = -1;
+      range_start[i] -= 1;
+      range_end[i] -= 1;
+      loop_order[0] = i;
+      loop_dir[0] = 0;
+      break;
     }
-  } else {
-    for (integer i = 0; i < dim; ++i) {
-      // if start==end, then it is the normal direction
-      if (range_start[i] == range_end[i]) {
-        face = i;
-        // if the same value is 1, it is the small label face, and the normal
-        // points to negative direction
-        if (range_start[i] == 1) direction = -1;
-        range_start[i] -= 1;
-        range_end[i] -= 1;
-        loop_order[0] = i;
-        loop_dir[0] = 0;
-        break;
-      }
-    }
+  }
+  if (dim == 2) {
     const integer next_face{1 - face};
     range_start[next_face] = std::abs(range_start[next_face]) - 1;
     range_end[next_face] = std::abs(range_end[next_face]) - 1;
     loop_order[1] = next_face;
     loop_dir[1] = range_start[next_face] < range_end[next_face] ? 1 : -1;
-    range_start[next_face] -= loop_dir[1] * ngg;
-    range_end[next_face] += loop_dir[1] * ngg;
-    range_start[2] = -ngg;
-    range_end[2] = ngg;
+    range_start[2] = 0;
+    range_end[2] = 0;
     loop_order[2] = 2;
-    loop_dir[2] = 1;
+    loop_dir[2] = 0;
+  } else {
+    integer next_face{0};
+    for (integer i = 0; i < dim; ++i) {
+      if (range_start[i] < 0) {
+        next_face = i;
+        range_start[i] = -range_start[i] - 1;
+        range_end[i] = -range_end[i] - 1;
+        loop_order[2] = i;
+        loop_dir[2] = range_start[i] < range_end[i] ? 1 : -1;
+        break;
+      }
+    }
+    next_face = 3 - face - next_face;
+    range_start[next_face] -= 1;
+    range_end[next_face] -= 1;
+    loop_order[1] = next_face;
+    loop_dir[1] = range_start[next_face] < range_end[next_face] ? 1 : -1;
+  }
+  // Include the corner into the transfer
+  // Commented
+//  for (integer i = 0; i < 3; ++i) {
+//    if (i != face) {
+//      range_start[i] -= loop_dir[i] * ngg;
+//      range_end[i] += loop_dir[i] * ngg;
+//    }
+//  }
+  for (integer i = 0; i < 3; ++i) {
+    n_point[i] = abs(range_start[i] - range_end[i]) + 1;
   }
 }
 
@@ -623,20 +621,23 @@ void cfd::Mesh::read_grid(const integer myid, const integer ngg) {
     //read grid coordinates
     for (integer k = 0; k < block[blk].mz; ++k) {
       for (integer j = 0; j < block[blk].my; ++j) {
-        for (integer i = 0; i < block[blk].mx; ++i)
+        for (integer i = 0; i < block[blk].mx; ++i) {
           grd >> block[blk].x(i, j, k);
+        }
       }
     }
     for (integer k = 0; k < block[blk].mz; ++k) {
       for (integer j = 0; j < block[blk].my; ++j) {
-        for (integer i = 0; i < block[blk].mx; ++i)
+        for (integer i = 0; i < block[blk].mx; ++i) {
           grd >> block[blk].y(i, j, k);
+        }
       }
     }
     for (integer k = 0; k < block[blk].mz; ++k) {
       for (integer j = 0; j < block[blk].my; ++j) {
-        for (integer i = 0; i < block[blk].mx; ++i)
+        for (integer i = 0; i < block[blk].mx; ++i) {
           grd >> block[blk].z(i, j, k);
+        }
       }
     }
   }
@@ -977,9 +978,17 @@ void cfd::Mesh::init_parallel_ghost_grid(const integer myid, const integer ngg) 
       const auto &face = B.parallel_face[f];
       //The length of the array is 3*(ngg+1)*${number of grid points of the face}
       //ngg+1 is the number of layers to communicate, 3 for 3 coordinates(x,y,z)
-      const integer len = 3 * (ngg + 1) * (std::abs(face.range_start[0] - face.range_end[0]) + 1)
-                          * (std::abs(face.range_end[1] - face.range_start[1]) + 1)
-                          * (std::abs(face.range_end[2] - face.range_start[2]) + 1);
+      integer extent[3]{std::abs(face.range_start[0] - face.range_end[0]) + 1,
+                        std::abs(face.range_start[1] - face.range_end[1]) + 1,
+                        std::abs(face.range_start[2] - face.range_end[2]) + 1};
+      for (int i = 0; i < 3; ++i) {
+        if (i == face.face) continue;
+        extent[i] += 2 * ngg + 2;
+      }
+      const integer len = 3 * (ngg + 1) * extent[0] * extent[1] * extent[2];
+//      const integer len = 3 * (ngg + 1) * (std::abs(face.range_start[0] - face.range_end[0]) + 1)
+//                          * (std::abs(face.range_end[1] - face.range_start[1]) + 1)
+//                          * (std::abs(face.range_end[2] - face.range_start[2]) + 1);
       temp_s[fc_num] = new real[len];
       temp_r[fc_num] = new real[len];
       ++fc_num;
@@ -1003,11 +1012,17 @@ void cfd::Mesh::init_parallel_ghost_grid(const integer myid, const integer ngg) 
                                                                                       Fc.range_end[2]};
       min_[0] = Fc.range_start[Fc.loop_order[0]] - Fc.direction;
       max_[0] = Fc.range_end[Fc.loop_order[0]] - Fc.direction * (ngg + 1);
-      min_[1] = Fc.range_start[Fc.loop_order[1]];
-      max_[1] = Fc.range_end[Fc.loop_order[1]];
-      min_[2] = Fc.range_start[Fc.loop_order[2]];
-      max_[2] = Fc.range_end[Fc.loop_order[2]];
-      const integer di1 = -Fc.direction, dj1 = Fc.loop_dir[1], dk1 = Fc.loop_dir[2];
+      min_[1] = Fc.range_start[Fc.loop_order[1]] - Fc.loop_dir[Fc.loop_order[1]] * (ngg + 1);
+      max_[1] = Fc.range_end[Fc.loop_order[1]] + Fc.loop_dir[Fc.loop_order[1]] * (ngg + 1);
+      min_[2] = Fc.range_start[Fc.loop_order[2]] - Fc.loop_dir[Fc.loop_order[2]] * (ngg + 1);
+      max_[2] = Fc.range_end[Fc.loop_order[2]] + Fc.loop_dir[Fc.loop_order[2]] * (ngg + 1);
+      const integer di1 = -Fc.direction, dj1 = Fc.loop_dir[1];
+      integer dk1 = Fc.loop_dir[2];
+      if (dimension == 2) {
+        min_[2] = -3;
+        max_[2] = 3;
+        dk1 = 1;
+      }
       integer send_ijk[]{0, 0, 0};
       for (send_ijk[Fc.loop_order[0]] = min_[0]; di1 * (send_ijk[Fc.loop_order[0]] - max_[0]) != 1; send_ijk[Fc.
           loop_order[0]] += di1) {
@@ -1047,12 +1062,18 @@ void cfd::Mesh::init_parallel_ghost_grid(const integer myid, const integer ngg) 
       integer min_[]{0, 0, 0}, max_[]{0, 0, 0};
       min_[0] = fc.range_start[fc.loop_order[0]] + fc.direction;
       max_[0] = fc.range_end[fc.loop_order[0]] + fc.direction * (ngg + 1);
-      min_[1] = fc.range_start[fc.loop_order[1]];
-      max_[1] = fc.range_end[fc.loop_order[1]];
-      min_[2] = fc.range_start[fc.loop_order[2]];
-      max_[2] = fc.range_end[fc.loop_order[2]];
-      const integer di1 = fc.direction, dj1 = fc.loop_dir[1], dk1 = fc.loop_dir[2];
+      min_[1] = fc.range_start[fc.loop_order[1]] - fc.loop_dir[fc.loop_order[1]] * (ngg + 1);
+      max_[1] = fc.range_end[fc.loop_order[1]] + fc.loop_dir[fc.loop_order[1]] * (ngg + 1);
+      min_[2] = fc.range_start[fc.loop_order[2]] - fc.loop_dir[fc.loop_order[2]] * (ngg + 1);
+      max_[2] = fc.range_end[fc.loop_order[2]] + fc.loop_dir[fc.loop_order[2]] * (ngg + 1);
+      const integer di1 = fc.direction, dj1 = fc.loop_dir[1];
+      integer dk1 = fc.loop_dir[2];
       integer n{0};
+      if (dimension == 2) {
+        min_[2] = -3;
+        max_[2] = 3;
+        dk1 = 1;
+      }
       integer recv_ijk[]{0, 0, 0};
       // Because x/y/z are stored independently, these values should be read continuously.
       for (recv_ijk[fc.loop_order[0]] = min_[0]; di1 * (recv_ijk[fc.loop_order[0]] - max_[0]) != 1; recv_ijk[fc.
