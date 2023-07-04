@@ -10,10 +10,10 @@ namespace cfd {
 template<MixtureModel mix_model, TurbMethod turb_method>
 __global__ void compute_source(cfd::DZone *zone, DParameter *param) {
   const integer extent[3]{zone->mx, zone->my, zone->mz};
-  const auto i = (integer) (blockDim.x * blockIdx.x + threadIdx.x);
-  const auto j = (integer) (blockDim.y * blockIdx.y + threadIdx.y);
-  const auto k = (integer) (blockDim.z * blockIdx.z + threadIdx.z);
-  if (i >= extent[0] || j >= extent[1] || k >= extent[2]) return;
+  const auto i = (integer) (blockDim.x * blockIdx.x + threadIdx.x)-1;
+  const auto j = (integer) (blockDim.y * blockIdx.y + threadIdx.y)-1;
+  const auto k = (integer) (blockDim.z * blockIdx.z + threadIdx.z)-1;
+  if (i >= extent[0]+1 || j >= extent[1]+1 || k >= extent[2]+1) return;
 
   if constexpr (turb_method == TurbMethod::RANS) {
     switch (param->rans_model) {

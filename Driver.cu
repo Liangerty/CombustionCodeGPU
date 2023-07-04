@@ -84,7 +84,7 @@ void Driver<mix_model, turb_method>::initialize_computation() {
 
   // Second, apply boundary conditions to all boundaries, including face communication between faces
   for (integer b = 0; b < mesh.n_block; ++b) {
-    bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
+    bound_cond.apply_boundary_conditions_1st_step(mesh[b], field[b], param);
   }
   if (myid == 0) {
     printf("Boundary conditions are applied successfully for initialization\n");
@@ -104,17 +104,10 @@ void Driver<mix_model, turb_method>::initialize_computation() {
   cudaDeviceSynchronize();
   // Third, communicate values between processes
   data_communication<mix_model, turb_method>(mesh, field, parameter, 0);
-  // Currently not implemented, thus the current program can only be used on a single GPU
-
   if (myid == 0) {
     printf("Finish data transfer.\n");
   }
   cudaDeviceSynchronize();
-//  MPI_Barrier(MPI_COMM_WORLD);
-//  output.print_field(5, 0);
-//  MPI_Barrier(MPI_COMM_WORLD);
-//  MPI_Abort(MPI_COMM_WORLD,1);
-
 
   for (auto b = 0; b < mesh.n_block; ++b) {
     integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
@@ -240,7 +233,6 @@ void Driver<mix_model, turb_method>::steady_simulation() {
     // First, store the value of last step
     if (step % output_screen == 0) {
       for (auto b = 0; b < n_block; ++b) {
-//        store_last_step(field[b].h_ptr);
         store_last_step<<<bpg[b], tpb>>>(field[b].d_ptr);
       }
     }
@@ -251,7 +243,11 @@ void Driver<mix_model, turb_method>::steady_simulation() {
 
       // Second, for each block, compute the residual dq
       // First, compute the source term, because properties such as mut are updated here.
-      compute_source<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
+      integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
+      dim3 BPG{(mx + 1) / tpb.x + 1, (my + 1) / tpb.y + 1, (mz + 1) / tpb.z + 1};
+      // compute mut including 1 layer of ghost grid for viscous discretization
+      compute_source<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
+
       compute_inviscid_flux<mix_model, turb_method>(mesh[b], field[b].d_ptr, param, n_var);
       compute_viscous_flux<mix_model, turb_method>(mesh[b], field[b].d_ptr, param, n_var);
 
@@ -271,23 +267,33 @@ void Driver<mix_model, turb_method>::steady_simulation() {
     }
     // Third, transfer data between and within processes
     data_communication(mesh, field, parameter, step);
-//    for (auto b = 0; b < n_block; ++b){
-//      update_bv<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
-//    }
-
-    if (mesh.dimension == 2) {
-      for (auto b = 0; b < n_block; ++b) {
-        const auto mx{mesh[b].mx}, my{mesh[b].my};
+    if (mesh.dimension==3){
+      for (auto b = 0; b < n_block; ++b){
+        integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
+        dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
+        update_bv<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
+      }
+    } else{
+      for (auto b = 0; b < n_block; ++b){
+        integer mx{mesh[b].mx}, my{mesh[b].my};
         dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, 1};
+        update_bv_2D<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
         eliminate_k_gradient<<<BPG, tpb>>>(field[b].d_ptr);
       }
     }
+
+//    if (mesh.dimension == 2) {
+//      for (auto b = 0; b < n_block; ++b) {
+//        const auto mx{mesh[b].mx}, my{mesh[b].my};
+//        dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, 1};
+//        eliminate_k_gradient<<<BPG, tpb>>>(field[b].d_ptr);
+//      }
+//    }
 
     // update physical properties such as Mach number, transport coefficients et, al.
     for (auto b = 0; b < n_block; ++b) {
       integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
       dim3 BPG{(mx + 1) / tpb.x + 1, (my + 1) / tpb.y + 1, (mz + 1) / tpb.z + 1};
-//      dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
       update_physical_properties<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
     }
 
