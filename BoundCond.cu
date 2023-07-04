@@ -91,8 +91,9 @@ register_inflow(Inflow<mix_model, turb_method> *&inflows, integer n_bc, std::vec
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 void
-DBoundCond<mix_model, turb_method>::apply_boundary_conditions_1st_step(const Block &block, Field<mix_model, turb_method> &field,
-                                                              DParameter *param) const {
+DBoundCond<mix_model, turb_method>::apply_boundary_conditions_1st_step(const Block &block,
+                                                                       Field<mix_model, turb_method> &field,
+                                                                       DParameter *param) const {
   // Boundary conditions are applied in the order of priority, which with higher priority is applied later.
   // Finally, the communication between faces will be carried out after these bc applied
   // Priority: (-1 - inner faces >) 2-wall > 3-symmetry > 5-inflow > 6-outflow > 4-farfield
@@ -183,6 +184,7 @@ DBoundCond<mix_model, turb_method>::apply_boundary_conditions_1st_step(const Blo
     }
   }
 }
+
 template<MixtureModel mix_model, TurbMethod turb_method>
 void
 DBoundCond<mix_model, turb_method>::apply_boundary_conditions(const Block &block, Field<mix_model, turb_method> &field,
@@ -705,7 +707,8 @@ __global__ void apply_outflow_1st_step(DZone *zone, integer i_face) {
 }
 
 template<MixtureModel mix_model, TurbMethod turb_method>
-__global__ void apply_inflow_1st_step(DZone *zone, Inflow<mix_model, turb_method> *inflow, DParameter *param, integer i_face) {
+__global__ void
+apply_inflow_1st_step(DZone *zone, Inflow<mix_model, turb_method> *inflow, DParameter *param, integer i_face) {
   const integer ngg = zone->ngg;
   integer dir[]{0, 0, 0};
   const auto &b = zone->boundary[i_face];
@@ -1129,6 +1132,13 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
 
   real t_wall{wall->temperature};
 
+  // First, we need the bv of inner ngg points.
+  for (int g = 1; g <= ngg; ++g){
+    const integer i_in[]{i - g * dir[0], j - g * dir[1], k - g * dir[2]};
+    update_bv_1point<mix_model,turb_method>(zone,param,i_in[0], i_in[1], i_in[2]);
+  }
+
+  // Next, for wall points
   const integer idx[]{i - dir[0], j - dir[1], k - dir[2]};
   if (wall->thermal_type == Wall::ThermalType::adiabatic) {
     t_wall = bv(idx[0], idx[1], idx[2], 5);
