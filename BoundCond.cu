@@ -91,8 +91,7 @@ register_inflow(Inflow<mix_model, turb_method> *&inflows, integer n_bc, std::vec
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 void
-DBoundCond<mix_model, turb_method>::apply_boundary_conditions_1st_step(const Block &block,
-                                                                       Field<mix_model, turb_method> &field,
+DBoundCond<mix_model, turb_method>::apply_boundary_conditions_1st_step(const Block &block, Field<mix_model, turb_method> &field,
                                                                        DParameter *param) const {
   // Boundary conditions are applied in the order of priority, which with higher priority is applied later.
   // Finally, the communication between faces will be carried out after these bc applied
@@ -184,7 +183,6 @@ DBoundCond<mix_model, turb_method>::apply_boundary_conditions_1st_step(const Blo
     }
   }
 }
-
 template<MixtureModel mix_model, TurbMethod turb_method>
 void
 DBoundCond<mix_model, turb_method>::apply_boundary_conditions(const Block &block, Field<mix_model, turb_method> &field,
@@ -470,6 +468,7 @@ void DBoundCond<mix_model, turb_method>::link_bc_to_boundaries(Mesh &mesh,
   delete[]i_inflow;
   delete[]i_outflow;
   //delete[]i_bcs;
+//  printf("Finish setting up boundary conditions.\n");
 }
 
 template
@@ -521,8 +520,8 @@ void count_boundary_of_type_bc(const std::vector<Boundary> &boundary, integer n_
 
   // Count how many faces correspond to the given bc
   const auto n_boundary{boundary.size()};
-  auto *n = new integer[n_bc];
-  memset(n, 0, sizeof(integer) * n_bc);
+  integer *n = new integer[n_bc];
+  memset(n,0,sizeof(integer)*n_bc);
   for (size_t l = 0; l < n_bc; l++) {
     integer label = bc_info[l].label; // This means every bc should have a member "label"
     for (size_t i = 0; i < n_boundary; i++) {
@@ -636,15 +635,6 @@ __global__ void apply_symmetry_1st_step(DZone *zone, integer i_face) {
 
     bv(gi, gj, gk, 0) = bv(ii, ij, ik, 0);
 
-//    metric = zone->metric(ii, ij, ik);
-//    k_x = metric(face + 1, 1);
-//    k_y = metric(face + 1, 2);
-//    k_z = metric(face + 1, 3);
-//    k_magnitude = sqrt(k_x * k_x + k_y * k_y + k_z * k_z);
-//    k_x /= k_magnitude;
-//    k_y /= k_magnitude;
-//    k_z /= k_magnitude;
-
     auto &u{bv(ii, ij, ik, 1)}, v{bv(ii, ij, ik, 2)}, w{bv(ii, ij, ik, 3)};
     u_k = k_x * u + k_y * v + k_z * w;
     bv(gi, gj, gk, 1) = u - 2 * u_k * k_x;
@@ -707,8 +697,7 @@ __global__ void apply_outflow_1st_step(DZone *zone, integer i_face) {
 }
 
 template<MixtureModel mix_model, TurbMethod turb_method>
-__global__ void
-apply_inflow_1st_step(DZone *zone, Inflow<mix_model, turb_method> *inflow, DParameter *param, integer i_face) {
+__global__ void apply_inflow_1st_step(DZone *zone, Inflow<mix_model, turb_method> *inflow, DParameter *param, integer i_face) {
   const integer ngg = zone->ngg;
   integer dir[]{0, 0, 0};
   const auto &b = zone->boundary[i_face];
@@ -730,27 +719,6 @@ apply_inflow_1st_step(DZone *zone, Inflow<mix_model, turb_method> *inflow, DPara
   const real v = inflow->v;
   const real w = inflow->w;
   const auto *i_sv = inflow->sv;
-
-//  bv(i, j, k, 0) = density;
-//  bv(i, j, k, 1) = u;
-//  bv(i, j, k, 2) = v;
-//  bv(i, j, k, 3) = w;
-//  bv(i, j, k, 4) = inflow->pressure;
-//  bv(i, j, k, 5) = inflow->temperature;
-//  for (int l = 0; l < n_scalar; ++l) {
-//    sv(i, j, k, l) = i_sv[l];
-//    if constexpr (mix_model != MixtureModel::FL) {
-//      cv(i, j, k, 5 + l) = density * i_sv[l];
-//    }
-//  }
-//  cv(i, j, k, 0) = density;
-//  cv(i, j, k, 1) = density * u;
-//  cv(i, j, k, 2) = density * v;
-//  cv(i, j, k, 3) = density * w;
-//  compute_total_energy<mix_model>(i, j, k, zone, param);
-//  if constexpr (turb_method == TurbMethod::RANS) {
-//    zone->mut(i, j, k) = inflow->mut;
-//  }
 
   for (integer g = 1; g <= ngg; g++) {
     const integer gi{i + g * dir[0]}, gj{j + g * dir[1]}, gk{k + g * dir[2]};
@@ -927,6 +895,8 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
   integer dir[]{0, 0, 0};
   dir[face] = b.direction;
 
+  const integer inner_idx[3]{i - dir[0], j - dir[1], k - dir[2]};
+
   auto metric = zone->metric(i, j, k);
   real k_x{metric(face + 1, 1)}, k_y{metric(face + 1, 2)}, k_z{metric(face + 1, 3)};
   real k_magnitude = sqrt(k_x * k_x + k_y * k_y + k_z * k_z);
@@ -934,131 +904,92 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
   k_y /= k_magnitude;
   k_z /= k_magnitude;
 
-  auto &cv = zone->cv;
-  const integer inner_idx[3]{i - dir[0], j - dir[1], k - dir[2]};
-  real u1{cv(inner_idx[0], inner_idx[1], inner_idx[2], 1) / cv(inner_idx[0], inner_idx[1], inner_idx[2], 0)},
-      v1{cv(inner_idx[0], inner_idx[1], inner_idx[2], 2) / cv(inner_idx[0], inner_idx[1], inner_idx[2], 0)},
-      w1{cv(inner_idx[0], inner_idx[1], inner_idx[2], 2) / cv(inner_idx[0], inner_idx[1], inner_idx[2], 0)};
-
-//  auto &bv = zone->bv;
-//  real u1{bv(inner_idx[0], inner_idx[1], inner_idx[2], 1)}, v1{bv(inner_idx[0], inner_idx[1], inner_idx[2], 2)}, w1{
-//      bv(inner_idx[0], inner_idx[1], inner_idx[2], 3)};
+  auto &bv = zone->bv;
+  real u1{bv(inner_idx[0], inner_idx[1], inner_idx[2], 1)}, v1{bv(inner_idx[0], inner_idx[1], inner_idx[2], 2)}, w1{
+      bv(inner_idx[0], inner_idx[1], inner_idx[2], 3)};
   real u_k{k_x * u1 + k_y * v1 + k_z * w1};
   const real u_t{u1 - k_x * u_k}, v_t{v1 - k_y * u_k}, w_t{w1 - k_z * u_k};
 
   // The gradient of tangential velocity should be zero.
-//  bv(i, j, k, 1) = u_t;
-//  bv(i, j, k, 2) = v_t;
-//  bv(i, j, k, 3) = w_t;
-//  zone->vel(i, j, k) = std::sqrt(u_t * u_t + v_t * v_t + w_t * w_t);
+  bv(i, j, k, 1) = u_t;
+  bv(i, j, k, 2) = v_t;
+  bv(i, j, k, 3) = w_t;
+  zone->vel(i, j, k) = std::sqrt(u_t * u_t + v_t * v_t + w_t * w_t);
   // The gradient of pressure, density, and scalars should also be zero.
-//  bv(i, j, k, 0) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 0);
-//  bv(i, j, k, 4) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 4);
-//  bv(i, j, k, 5) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 5);
-//  auto &sv = zone->sv;
-//  for (integer l = 0; l < zone->n_scal; ++l) {
-//    sv(i, j, k, l) = sv(inner_idx[0], inner_idx[1], inner_idx[2], l);
-//  }
-
-  // Assign values for conservative variables
-  real density_1 = cv(inner_idx[0], inner_idx[1], inner_idx[2], 0);
-  cv(i, j, k, 0) = density_1;
-  cv(i, j, k, 1) = density_1 * u_t;
-  cv(i, j, k, 2) = density_1 * v_t;
-  cv(i, j, k, 3) = density_1 * w_t;
-  // Scalars gradient are assumed to be 0, thus the difference in total energy is only caused by kinetic energy.
-  cv(i, j, k, 4) = cv(inner_idx[0], inner_idx[1], inner_idx[2], 4) -
-                   0.5 * density_1 * (u1 * u1 + v1 * v1 + w1 * w1) +
-                   0.5 * density_1 * (u_t * u_t + v_t * v_t + w_t * w_t);
+  bv(i, j, k, 0) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 0);
+  bv(i, j, k, 4) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 4);
+  bv(i, j, k, 5) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 5);
+  auto &sv = zone->sv;
   for (integer l = 0; l < zone->n_scal; ++l) {
-    cv(i, j, k, 5 + l) = cv(inner_idx[0], inner_idx[1], inner_idx[2], 5 + l);
+    sv(i, j, k, l) = sv(inner_idx[0], inner_idx[1], inner_idx[2], l);
   }
 
-  // For ghost grids
-  // The first layer needs the values of the inner 1st layer, which has been computed.
+  // Assign values for conservative variables
+  auto &cv = zone->cv;
+  cv(i, j, k, 0) = bv(i, j, k, 0);
+  cv(i, j, k, 1) = bv(i, j, k, 0) * bv(i, j, k, 1);
+  cv(i, j, k, 2) = bv(i, j, k, 0) * bv(i, j, k, 2);
+  cv(i, j, k, 3) = bv(i, j, k, 0) * bv(i, j, k, 3);
+  // Scalars gradient are assumed to be 0, thus the difference in total energy is only caused by kinetic energy.
+  cv(i, j, k, 4) = cv(inner_idx[0], inner_idx[1], inner_idx[2], 4) -
+                   0.5 * bv(inner_idx[0], inner_idx[1], inner_idx[2], 0) * (u1 * u1 + v1 * v1 + w1 * w1) +
+                   0.5 * bv(i, j, k, 0) * (u_t * u_t + v_t * v_t + w_t * w_t);
+  for (integer l = 0; l < zone->n_scal; ++l) {
+    cv(i, j, k, 5 + l) = bv(i, j, k, 0) * sv(i, j, k, l);
+  }
+
+  // For ghsot grids
   for (integer g = 1; g <= zone->ngg; ++g) {
     const integer gi{i + g * dir[0]}, gj{j + g * dir[1]}, gk{k + g * dir[2]};
     const integer ii{i - g * dir[0]}, ij{j - g * dir[1]}, ik{k - g * dir[2]};
 
-    const real density = cv(ii, ij, ik, 0);
+    bv(gi, gj, gk, 0) = bv(ii, ij, ik, 0);
 
-    const auto ui{cv(ii, ij, ik, 1) / density}, vi{cv(ii, ij, ik, 2) / density}, wi{cv(ii, ij, ik, 3) / density};
-    u_k = k_x * ui + k_y * vi + k_z * wi;
+    auto &u{bv(ii, ij, ik, 1)}, v{bv(ii, ij, ik, 2)}, w{bv(ii, ij, ik, 3)};
+    u_k = k_x * u + k_y * v + k_z * w;
+    bv(gi, gj, gk, 1) = u - 2 * u_k * k_x;
+    bv(gi, gj, gk, 2) = v - 2 * u_k * k_y;
+    bv(gi, gj, gk, 3) = w - 2 * u_k * k_z;
+    zone->vel(gi, gj, gk) = std::sqrt(bv(gi, gj, gk, 1) * bv(gi, gj, gk, 1) + bv(gi, gj, gk, 2) * bv(gi, gj, gk, 2) +
+                                      bv(gi, gj, gk, 3) * bv(gi, gj, gk, 3));
+    bv(gi, gj, gk, 4) = bv(ii, ij, ik, 4);
+    bv(gi, gj, gk, 5) = bv(ii, ij, ik, 5);
+    for (integer l = 0; l < zone->n_scal; ++l) {
+      sv(gi, gj, gk, l) = sv(ii, ij, ik, l);
+    }
 
-    const real ug{ui - 2 * u_k * k_x}, vg{vi - 2 * u_k * k_y}, wg{wi - 2 * u_k * k_z};
-
-    // Assign value for conservative variables
-    cv(gi, gj, gk, 0) = density;
-    cv(gi, gj, gk, 1) = density * ug;
-    cv(gi, gj, gk, 2) = density * vg;
-    cv(gi, gj, gk, 3) = density * wg;
-    cv(gi, gj, gk, 4) = cv(ii, ij, ik, 4);
+    if constexpr (turb_method == TurbMethod::RANS) {
+      zone->mut(gi, gj, gk) = zone->mut(ii, ij, ik);
+    }
   }
-//  for (integer g = 1; g <= zone->ngg; ++g) {
-//    const integer gi{i + g * dir[0]}, gj{j + g * dir[1]}, gk{k + g * dir[2]};
-//    const integer ii{i - g * dir[0]}, ij{j - g * dir[1]}, ik{k - g * dir[2]};
-//
-//    bv(gi, gj, gk, 0) = bv(ii, ij, ik, 0);
-//
-//    auto &u{bv(ii, ij, ik, 1)}, v{bv(ii, ij, ik, 2)}, w{bv(ii, ij, ik, 3)};
-//    u_k = k_x * u + k_y * v + k_z * w;
-//    bv(gi, gj, gk, 1) = u - 2 * u_k * k_x;
-//    bv(gi, gj, gk, 2) = v - 2 * u_k * k_y;
-//    bv(gi, gj, gk, 3) = w - 2 * u_k * k_z;
-//    zone->vel(gi, gj, gk) = std::sqrt(bv(gi, gj, gk, 1) * bv(gi, gj, gk, 1) + bv(gi, gj, gk, 2) * bv(gi, gj, gk, 2) +
-//                                      bv(gi, gj, gk, 3) * bv(gi, gj, gk, 3));
-//    bv(gi, gj, gk, 4) = bv(ii, ij, ik, 4);
-//    bv(gi, gj, gk, 5) = bv(ii, ij, ik, 5);
-//    for (integer l = 0; l < zone->n_scal; ++l) {
-//      sv(gi, gj, gk, l) = sv(ii, ij, ik, l);
-//      cv(gi, gj, gk, l + 5) = bv(gi, gj, gk, 0) * sv(ii, ij, ik, l);
-//    }
-//
-//    // Assign value for conservative variables
-//    cv(gi, gj, gk, 0) = bv(gi, gj, gk, 0);
-//    cv(gi, gj, gk, 1) = bv(gi, gj, gk, 0) * bv(gi, gj, gk, 1);
-//    cv(gi, gj, gk, 2) = bv(gi, gj, gk, 0) * bv(gi, gj, gk, 2);
-//    cv(gi, gj, gk, 3) = bv(gi, gj, gk, 0) * bv(gi, gj, gk, 3);
-//    cv(gi, gj, gk, 4) = cv(ii, ij, ik, 4);
-//
-//    if constexpr (turb_method == TurbMethod::RANS) {
-//      zone->mut(gi, gj, gk) = zone->mut(ii, ij, ik);
-//    }
-//  }
 }
 
 template<TurbMethod turb_method>
 __global__ void apply_outflow(DZone *zone, integer i_face) {
+  const integer ngg = zone->ngg;
+  integer dir[]{0, 0, 0};
   const auto &b = zone->boundary[i_face];
+  dir[b.face] = b.direction;
   auto range_start = b.range_start, range_end = b.range_end;
   integer i = range_start[0] + (integer) (blockDim.x * blockIdx.x + threadIdx.x);
   integer j = range_start[1] + (integer) (blockDim.y * blockIdx.y + threadIdx.y);
   integer k = range_start[2] + (integer) (blockDim.z * blockIdx.z + threadIdx.z);
   if (i > range_end[0] || j > range_end[1] || k > range_end[2]) return;
 
-//  auto &bv = zone->bv;
-  auto &cv = zone->cv;
-//  auto &sv = zone->sv;
-  integer dir[]{0, 0, 0};
-  dir[b.face] = b.direction;
+  auto &bv = zone->bv;
+  auto &sv = zone->sv;
 
-  for (integer g = 1; g <= zone->ngg; ++g) {
+  for (integer g = 1; g <= ngg; ++g) {
     const integer gi{i + g * dir[0]}, gj{j + g * dir[1]}, gk{k + g * dir[2]};
-//    for (integer l = 0; l < 6; ++l) {
-//      bv(gi, gj, gk, l) = bv(i, j, k, l);
-//    }
-    for (integer l = 0; l < zone->n_var; ++l) {
-      // All conservative variables including species and scalars are assigned with appropriate value
-      cv(gi, gj, gk, l) = cv(i, j, k, l);
+    for (integer l = 0; l < 6; ++l) {
+      bv(gi, gj, gk, l) = bv(i, j, k, l);
     }
-//    for (integer l = 0; l < zone->n_scal; ++l) {
-//      sv(gi, gj, gk, l) = sv(i, j, k, l);
-//    }
-//
-//    // We just want conservative variables here, but the mut is necessary
-//    if constexpr (turb_method == TurbMethod::RANS) {
-//      zone->mut(gi, gj, gk) = zone->mut(i, j, k);
-//    }
+    for (integer l = 0; l < zone->n_scal; ++l) {
+      sv(gi, gj, gk, l) = sv(i, j, k, l);
+    }
+    if constexpr (turb_method == TurbMethod::RANS) {
+      zone->mut(gi, gj, gk) = zone->mut(i, j, k);
+    }
   }
 }
 
@@ -1074,9 +1005,8 @@ __global__ void apply_inflow(DZone *zone, Inflow<mix_model, turb_method> *inflow
   integer k = range_start[2] + (integer) (blockDim.z * blockIdx.z + threadIdx.z);
   if (i > range_end[0] || j > range_end[1] || k > range_end[2]) return;
 
-//  auto &bv = zone->bv;
-  auto &cv = zone->cv;
-//  auto &sv = zone->sv;
+  auto &bv = zone->bv;
+  auto &sv = zone->sv;
 
   const integer n_scalar = zone->n_scal;
 
@@ -1088,41 +1018,18 @@ __global__ void apply_inflow(DZone *zone, Inflow<mix_model, turb_method> *inflow
 
   for (integer g = 1; g <= ngg; g++) {
     const integer gi{i + g * dir[0]}, gj{j + g * dir[1]}, gk{k + g * dir[2]};
-//    bv(gi, gj, gk, 0) = density;
-//    bv(gi, gj, gk, 1) = u;
-//    bv(gi, gj, gk, 2) = v;
-//    bv(gi, gj, gk, 3) = w;
-//    bv(gi, gj, gk, 4) = inflow->pressure;
-//    bv(gi, gj, gk, 5) = inflow->temperature;
-    cv(gi, gj, gk, 0) = density;
-    cv(gi, gj, gk, 1) = density * u;
-    cv(gi, gj, gk, 2) = density * v;
-    cv(gi, gj, gk, 3) = density * w;
+    bv(gi, gj, gk, 0) = density;
+    bv(gi, gj, gk, 1) = u;
+    bv(gi, gj, gk, 2) = v;
+    bv(gi, gj, gk, 3) = w;
+    bv(gi, gj, gk, 4) = inflow->pressure;
+    bv(gi, gj, gk, 5) = inflow->temperature;
     for (int l = 0; l < n_scalar; ++l) {
-//      sv(gi, gj, gk, l) = i_sv[l];
-      if constexpr (mix_model != MixtureModel::FL) {
-        cv(gi, gj, gk, 5 + l) = density * i_sv[l];
-      }
+      sv(gi, gj, gk, l) = i_sv[l];
     }
-
-    real vel = u * u + v * v + w * w;
-    cv(gi, gj, gk, 4) = 0.5 * density * vel;
-    if constexpr (mix_model != MixtureModel::Air) {
-      real enthalpy[MAX_SPEC_NUMBER];
-      compute_enthalpy(inflow->temperature, enthalpy, param);
-      // Add species enthalpy together up to kinetic energy to get total enthalpy
-      for (auto l = 0; l < zone->n_spec; l++) {
-        cv(gi, gj, gk, 4) += enthalpy[l] * cv(gi, gj, gk, 5 + l);
-      }
-      cv(gi, gj, gk, 4) -= inflow->pressure;  // (\rho e =\rho h - p)
-    } else {
-      cv(gi, gj, gk, 4) += inflow->pressure / (cfd::gamma_air - 1);
+    if constexpr (turb_method == TurbMethod::RANS) {
+      zone->mut(gi, gj, gk) = inflow->mut;
     }
-
-//    compute_total_energy<mix_model>(gi, gj, gk, zone, param);
-//    if constexpr (turb_method == TurbMethod::RANS) {
-//      zone->mut(gi, gj, gk) = inflow->mut;
-//    }
   }
 }
 
@@ -1145,13 +1052,6 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
 
   real t_wall{wall->temperature};
 
-  // First, we need the bv of inner ngg points.
-  for (int g = 1; g <= ngg; ++g) {
-    const integer i_in[]{i - g * dir[0], j - g * dir[1], k - g * dir[2]};
-    update_bv_1point<mix_model, turb_method>(zone, param, i_in[0], i_in[1], i_in[2]);
-  }
-
-  // Next, for wall points
   const integer idx[]{i - dir[0], j - dir[1], k - dir[2]};
   if (wall->thermal_type == Wall::ThermalType::adiabatic) {
     t_wall = bv(idx[0], idx[1], idx[2], 5);
@@ -1245,30 +1145,19 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
     bv(i_gh[0], i_gh[1], i_gh[2], 3) = -w_i;
     bv(i_gh[0], i_gh[1], i_gh[2], 4) = p_i;
     bv(i_gh[0], i_gh[1], i_gh[2], 5) = t_g;
-    cv(i_gh[0], i_gh[1], i_gh[2], 0) = rho_g;
-    cv(i_gh[0], i_gh[1], i_gh[2], 1) = -rho_g * u_i;
-    cv(i_gh[0], i_gh[1], i_gh[2], 2) = -rho_g * v_i;
-    cv(i_gh[0], i_gh[1], i_gh[2], 3) = -rho_g * w_i;
-    if constexpr (mix_model != MixtureModel::FL) {
-      for (integer l = 0; l < zone->n_spec; ++l) {
-        cv(i_gh[0], i_gh[1], i_gh[2], l + 5) = sv(i_gh[0], i_gh[1], i_gh[2], l) * rho_g;
-      }
-    }
-    compute_total_energy<mix_model>(i_gh[0], i_gh[1], i_gh[2], zone, param);
 
     // turbulent boundary condition
     if constexpr (turb_method == TurbMethod::RANS) {
       if (param->rans_model == 2) {
         // SST
         sv(i_gh[0], i_gh[1], i_gh[2], n_spec) = 0;
-        cv(i_gh[0], i_gh[1], i_gh[2], n_spec + 5) = 0;
         sv(i_gh[0], i_gh[1], i_gh[2], n_spec + 1) = sv(i, j, k, n_spec + 1);
-        cv(i_gh[0], i_gh[1], i_gh[2], n_spec + 6) = sv(i, j, k, n_spec + 1) * rho_g;
         zone->mut(i_gh[0], i_gh[1], i_gh[2]) = 0;
       }
     }
   }
 }
+
 
 } // cfd
 #endif

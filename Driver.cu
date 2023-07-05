@@ -103,7 +103,8 @@ void Driver<mix_model, turb_method>::initialize_computation() {
   }
   cudaDeviceSynchronize();
   // Third, communicate values between processes
-  data_communication<mix_model, turb_method>(mesh, field, parameter, 0);
+  data_communication<mix_model, turb_method>(mesh, field, parameter, 0, param);
+
   if (myid == 0) {
     printf("Finish data transfer.\n");
   }
@@ -243,11 +244,7 @@ void Driver<mix_model, turb_method>::steady_simulation() {
 
       // Second, for each block, compute the residual dq
       // First, compute the source term, because properties such as mut are updated here.
-      integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
-      dim3 BPG{(mx + 1) / tpb.x + 1, (my + 1) / tpb.y + 1, (mz + 1) / tpb.z + 1};
-      // compute mut including 1 layer of ghost grid for viscous discretization
-      compute_source<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
-
+      compute_source<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
       compute_inviscid_flux<mix_model, turb_method>(mesh[b], field[b].d_ptr, param, n_var);
       compute_viscous_flux<mix_model, turb_method>(mesh[b], field[b].d_ptr, param, n_var);
 
@@ -260,36 +257,21 @@ void Driver<mix_model, turb_method>::steady_simulation() {
       update_cv_and_bv<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
 
       // limit unphysical values computed by the program
-//      limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
+      limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
 
       // apply boundary conditions
       bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
     }
     // Third, transfer data between and within processes
-    data_communication(mesh, field, parameter, step);
-    if (mesh.dimension==3){
-      for (auto b = 0; b < n_block; ++b){
-        integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
-        dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
-        update_bv<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
-        // limit unphysical values computed by the program
-        limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
-      }
-    } else{
-      for (auto b = 0; b < n_block; ++b){
-        integer mx{mesh[b].mx}, my{mesh[b].my};
+    data_communication(mesh, field, parameter, step, param);
+
+    if (mesh.dimension == 2) {
+      for (auto b = 0; b < n_block; ++b) {
+        const auto mx{mesh[b].mx}, my{mesh[b].my};
         dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, 1};
-        update_bv_2D<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
-        // limit unphysical values computed by the program
-        limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
         eliminate_k_gradient<<<BPG, tpb>>>(field[b].d_ptr);
       }
     }
-
-    // limit unphysical values computed by the program
-//    for (auto b = 0; b < n_block; ++b){
-//      limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
-//    }
 
     // update physical properties such as Mach number, transport coefficients et, al.
     for (auto b = 0; b < n_block; ++b) {
