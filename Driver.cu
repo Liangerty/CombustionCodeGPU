@@ -260,7 +260,7 @@ void Driver<mix_model, turb_method>::steady_simulation() {
       update_cv_and_bv<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
 
       // limit unphysical values computed by the program
-      limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
+//      limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
 
       // apply boundary conditions
       bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
@@ -272,22 +272,23 @@ void Driver<mix_model, turb_method>::steady_simulation() {
         integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
         dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
         update_bv<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
+        // limit unphysical values computed by the program
+        limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
       }
     } else{
       for (auto b = 0; b < n_block; ++b){
         integer mx{mesh[b].mx}, my{mesh[b].my};
         dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, 1};
         update_bv_2D<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
+        // limit unphysical values computed by the program
+        limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
         eliminate_k_gradient<<<BPG, tpb>>>(field[b].d_ptr);
       }
     }
 
-//    if (mesh.dimension == 2) {
-//      for (auto b = 0; b < n_block; ++b) {
-//        const auto mx{mesh[b].mx}, my{mesh[b].my};
-//        dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, 1};
-//        eliminate_k_gradient<<<BPG, tpb>>>(field[b].d_ptr);
-//      }
+    // limit unphysical values computed by the program
+//    for (auto b = 0; b < n_block; ++b){
+//      limit_flow<<<bpg[b], tpb>>>(field[b].d_ptr, param, b);
 //    }
 
     // update physical properties such as Mach number, transport coefficients et, al.

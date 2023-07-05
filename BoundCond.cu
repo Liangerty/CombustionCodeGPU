@@ -927,9 +927,6 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
   integer dir[]{0, 0, 0};
   dir[face] = b.direction;
 
-  const integer inner_idx[3]{i - dir[0], j - dir[1], k - dir[2]};
-
-//  auto metric = zone->metric(inner_idx[0], inner_idx[1], inner_idx[2]);
   auto metric = zone->metric(i, j, k);
   real k_x{metric(face + 1, 1)}, k_y{metric(face + 1, 2)}, k_z{metric(face + 1, 3)};
   real k_magnitude = sqrt(k_x * k_x + k_y * k_y + k_z * k_z);
@@ -937,81 +934,97 @@ __global__ void apply_symmetry(DZone *zone, integer i_face) {
   k_y /= k_magnitude;
   k_z /= k_magnitude;
 
-  auto &bv = zone->bv;
-  real u1{bv(inner_idx[0], inner_idx[1], inner_idx[2], 1)}, v1{bv(inner_idx[0], inner_idx[1], inner_idx[2], 2)}, w1{
-      bv(inner_idx[0], inner_idx[1], inner_idx[2], 3)};
+  auto &cv = zone->cv;
+  const integer inner_idx[3]{i - dir[0], j - dir[1], k - dir[2]};
+  real u1{cv(inner_idx[0], inner_idx[1], inner_idx[2], 1) / cv(inner_idx[0], inner_idx[1], inner_idx[2], 0)},
+      v1{cv(inner_idx[0], inner_idx[1], inner_idx[2], 2) / cv(inner_idx[0], inner_idx[1], inner_idx[2], 0)},
+      w1{cv(inner_idx[0], inner_idx[1], inner_idx[2], 2) / cv(inner_idx[0], inner_idx[1], inner_idx[2], 0)};
+
+//  auto &bv = zone->bv;
+//  real u1{bv(inner_idx[0], inner_idx[1], inner_idx[2], 1)}, v1{bv(inner_idx[0], inner_idx[1], inner_idx[2], 2)}, w1{
+//      bv(inner_idx[0], inner_idx[1], inner_idx[2], 3)};
   real u_k{k_x * u1 + k_y * v1 + k_z * w1};
   const real u_t{u1 - k_x * u_k}, v_t{v1 - k_y * u_k}, w_t{w1 - k_z * u_k};
 
   // The gradient of tangential velocity should be zero.
-  bv(i, j, k, 1) = u_t;
-  bv(i, j, k, 2) = v_t;
-  bv(i, j, k, 3) = w_t;
-  zone->vel(i, j, k) = std::sqrt(u_t * u_t + v_t * v_t + w_t * w_t);
+//  bv(i, j, k, 1) = u_t;
+//  bv(i, j, k, 2) = v_t;
+//  bv(i, j, k, 3) = w_t;
+//  zone->vel(i, j, k) = std::sqrt(u_t * u_t + v_t * v_t + w_t * w_t);
   // The gradient of pressure, density, and scalars should also be zero.
-  bv(i, j, k, 0) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 0);
-  bv(i, j, k, 4) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 4);
-  bv(i, j, k, 5) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 5);
-  auto &sv = zone->sv;
-  for (integer l = 0; l < zone->n_scal; ++l) {
-    sv(i, j, k, l) = sv(inner_idx[0], inner_idx[1], inner_idx[2], l);
-  }
+//  bv(i, j, k, 0) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 0);
+//  bv(i, j, k, 4) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 4);
+//  bv(i, j, k, 5) = bv(inner_idx[0], inner_idx[1], inner_idx[2], 5);
+//  auto &sv = zone->sv;
+//  for (integer l = 0; l < zone->n_scal; ++l) {
+//    sv(i, j, k, l) = sv(inner_idx[0], inner_idx[1], inner_idx[2], l);
+//  }
 
   // Assign values for conservative variables
-  auto &cv = zone->cv;
-  cv(i, j, k, 0) = bv(i, j, k, 0);
-  cv(i, j, k, 1) = bv(i, j, k, 0) * bv(i, j, k, 1);
-  cv(i, j, k, 2) = bv(i, j, k, 0) * bv(i, j, k, 2);
-  cv(i, j, k, 3) = bv(i, j, k, 0) * bv(i, j, k, 3);
+  real density_1 = cv(inner_idx[0], inner_idx[1], inner_idx[2], 0);
+  cv(i, j, k, 0) = density_1;
+  cv(i, j, k, 1) = density_1 * u_t;
+  cv(i, j, k, 2) = density_1 * v_t;
+  cv(i, j, k, 3) = density_1 * w_t;
   // Scalars gradient are assumed to be 0, thus the difference in total energy is only caused by kinetic energy.
   cv(i, j, k, 4) = cv(inner_idx[0], inner_idx[1], inner_idx[2], 4) -
-                   0.5 * bv(inner_idx[0], inner_idx[1], inner_idx[2], 0) * (u1 * u1 + v1 * v1 + w1 * w1) +
-                   0.5 * bv(i, j, k, 0) * (u_t * u_t + v_t * v_t + w_t * w_t);
+                   0.5 * density_1 * (u1 * u1 + v1 * v1 + w1 * w1) +
+                   0.5 * density_1 * (u_t * u_t + v_t * v_t + w_t * w_t);
   for (integer l = 0; l < zone->n_scal; ++l) {
-    cv(i, j, k, 5 + l) = bv(i, j, k, 0) * sv(i, j, k, l);
+    cv(i, j, k, 5 + l) = cv(inner_idx[0], inner_idx[1], inner_idx[2], 5 + l);
   }
 
-  // For ghsot grids
+  // For ghost grids
+  // The first layer needs the values of the inner 1st layer, which has been computed.
   for (integer g = 1; g <= zone->ngg; ++g) {
     const integer gi{i + g * dir[0]}, gj{j + g * dir[1]}, gk{k + g * dir[2]};
     const integer ii{i - g * dir[0]}, ij{j - g * dir[1]}, ik{k - g * dir[2]};
 
-    bv(gi, gj, gk, 0) = bv(ii, ij, ik, 0);
+    const real density = cv(ii, ij, ik, 0);
 
-//    metric = zone->metric(ii, ij, ik);
-//    k_x = metric(face + 1, 1);
-//    k_y = metric(face + 1, 2);
-//    k_z = metric(face + 1, 3);
-//    k_magnitude = sqrt(k_x * k_x + k_y * k_y + k_z * k_z);
-//    k_x /= k_magnitude;
-//    k_y /= k_magnitude;
-//    k_z /= k_magnitude;
+    const auto ui{cv(ii, ij, ik, 1) / density}, vi{cv(ii, ij, ik, 2) / density}, wi{cv(ii, ij, ik, 3) / density};
+    u_k = k_x * ui + k_y * vi + k_z * wi;
 
-    auto &u{bv(ii, ij, ik, 1)}, v{bv(ii, ij, ik, 2)}, w{bv(ii, ij, ik, 3)};
-    u_k = k_x * u + k_y * v + k_z * w;
-    bv(gi, gj, gk, 1) = u - 2 * u_k * k_x;
-    bv(gi, gj, gk, 2) = v - 2 * u_k * k_y;
-    bv(gi, gj, gk, 3) = w - 2 * u_k * k_z;
-    zone->vel(gi, gj, gk) = std::sqrt(bv(gi, gj, gk, 1) * bv(gi, gj, gk, 1) + bv(gi, gj, gk, 2) * bv(gi, gj, gk, 2) +
-                                      bv(gi, gj, gk, 3) * bv(gi, gj, gk, 3));
-    bv(gi, gj, gk, 4) = bv(ii, ij, ik, 4);
-    bv(gi, gj, gk, 5) = bv(ii, ij, ik, 5);
-    for (integer l = 0; l < zone->n_scal; ++l) {
-      sv(gi, gj, gk, l) = sv(ii, ij, ik, l);
-      cv(gi, gj, gk, l + 5) = bv(gi, gj, gk, 0) * sv(ii, ij, ik, l);
-    }
+    const real ug{ui - 2 * u_k * k_x}, vg{vi - 2 * u_k * k_y}, wg{wi - 2 * u_k * k_z};
 
     // Assign value for conservative variables
-    cv(gi, gj, gk, 0) = bv(gi, gj, gk, 0);
-    cv(gi, gj, gk, 1) = bv(gi, gj, gk, 0) * bv(gi, gj, gk, 1);
-    cv(gi, gj, gk, 2) = bv(gi, gj, gk, 0) * bv(gi, gj, gk, 2);
-    cv(gi, gj, gk, 3) = bv(gi, gj, gk, 0) * bv(gi, gj, gk, 3);
+    cv(gi, gj, gk, 0) = density;
+    cv(gi, gj, gk, 1) = density * ug;
+    cv(gi, gj, gk, 2) = density * vg;
+    cv(gi, gj, gk, 3) = density * wg;
     cv(gi, gj, gk, 4) = cv(ii, ij, ik, 4);
-
-    if constexpr (turb_method == TurbMethod::RANS) {
-      zone->mut(gi, gj, gk) = zone->mut(ii, ij, ik);
-    }
   }
+//  for (integer g = 1; g <= zone->ngg; ++g) {
+//    const integer gi{i + g * dir[0]}, gj{j + g * dir[1]}, gk{k + g * dir[2]};
+//    const integer ii{i - g * dir[0]}, ij{j - g * dir[1]}, ik{k - g * dir[2]};
+//
+//    bv(gi, gj, gk, 0) = bv(ii, ij, ik, 0);
+//
+//    auto &u{bv(ii, ij, ik, 1)}, v{bv(ii, ij, ik, 2)}, w{bv(ii, ij, ik, 3)};
+//    u_k = k_x * u + k_y * v + k_z * w;
+//    bv(gi, gj, gk, 1) = u - 2 * u_k * k_x;
+//    bv(gi, gj, gk, 2) = v - 2 * u_k * k_y;
+//    bv(gi, gj, gk, 3) = w - 2 * u_k * k_z;
+//    zone->vel(gi, gj, gk) = std::sqrt(bv(gi, gj, gk, 1) * bv(gi, gj, gk, 1) + bv(gi, gj, gk, 2) * bv(gi, gj, gk, 2) +
+//                                      bv(gi, gj, gk, 3) * bv(gi, gj, gk, 3));
+//    bv(gi, gj, gk, 4) = bv(ii, ij, ik, 4);
+//    bv(gi, gj, gk, 5) = bv(ii, ij, ik, 5);
+//    for (integer l = 0; l < zone->n_scal; ++l) {
+//      sv(gi, gj, gk, l) = sv(ii, ij, ik, l);
+//      cv(gi, gj, gk, l + 5) = bv(gi, gj, gk, 0) * sv(ii, ij, ik, l);
+//    }
+//
+//    // Assign value for conservative variables
+//    cv(gi, gj, gk, 0) = bv(gi, gj, gk, 0);
+//    cv(gi, gj, gk, 1) = bv(gi, gj, gk, 0) * bv(gi, gj, gk, 1);
+//    cv(gi, gj, gk, 2) = bv(gi, gj, gk, 0) * bv(gi, gj, gk, 2);
+//    cv(gi, gj, gk, 3) = bv(gi, gj, gk, 0) * bv(gi, gj, gk, 3);
+//    cv(gi, gj, gk, 4) = cv(ii, ij, ik, 4);
+//
+//    if constexpr (turb_method == TurbMethod::RANS) {
+//      zone->mut(gi, gj, gk) = zone->mut(ii, ij, ik);
+//    }
+//  }
 }
 
 template<TurbMethod turb_method>
@@ -1133,9 +1146,9 @@ __global__ void apply_wall(DZone *zone, Wall *wall, DParameter *param, integer i
   real t_wall{wall->temperature};
 
   // First, we need the bv of inner ngg points.
-  for (int g = 1; g <= ngg; ++g){
+  for (int g = 1; g <= ngg; ++g) {
     const integer i_in[]{i - g * dir[0], j - g * dir[1], k - g * dir[2]};
-    update_bv_1point<mix_model,turb_method>(zone,param,i_in[0], i_in[1], i_in[2]);
+    update_bv_1point<mix_model, turb_method>(zone, param, i_in[0], i_in[1], i_in[2]);
   }
 
   // Next, for wall points
