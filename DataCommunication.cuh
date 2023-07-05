@@ -1,4 +1,5 @@
 #pragma once
+
 #include "Define.h"
 #include <vector>
 #include <mpi.h>
@@ -10,28 +11,25 @@
 
 namespace cfd {
 template<MixtureModel mix_model, TurbMethod turb_method>
-struct Field;
-
-template<MixtureModel mix_model, TurbMethod turb_method>
 void data_communication(const Mesh &mesh, std::vector<cfd::Field<mix_model, turb_method>> &field,
-                        const Parameter &parameter, integer step, DParameter* param);
-
-struct DZone;
+                        const Parameter &parameter, integer step, DParameter *param);
 
 template<MixtureModel mix_model, TurbMethod turb_method>
-__global__ void inner_communication(DZone *zone, DZone *tar_zone, integer i_face, DParameter* param);
+__global__ void inner_communication(DZone *zone, DZone *tar_zone, integer i_face, DParameter *param);
 
 template<MixtureModel mix_model, TurbMethod turb_method>
-void parallel_communication(const Mesh &mesh, std::vector<cfd::Field<mix_model, turb_method>> &field, integer step, DParameter* param);
+void parallel_communication(const Mesh &mesh, std::vector<cfd::Field<mix_model, turb_method>> &field, integer step,
+                            DParameter *param);
 
 __global__ void setup_data_to_be_sent(DZone *zone, integer i_face, real *data);
 
 template<MixtureModel mix_model, TurbMethod turb_method>
-__global__ void assign_data_received(DZone *zone, integer i_face, const real *data, DParameter* param);
+__global__ void assign_data_received(DZone *zone, integer i_face, const real *data, DParameter *param);
 
+// Implementations
 template<MixtureModel mix_model, TurbMethod turb_method>
 void data_communication(const Mesh &mesh, std::vector<cfd::Field<mix_model, turb_method>> &field,
-                        const Parameter &parameter, integer step, DParameter* param) {
+                        const Parameter &parameter, integer step, DParameter *param) {
   // -1 - inner faces
   for (auto blk = 0; blk < mesh.n_block; ++blk) {
     auto &inF = mesh[blk].inner_face;
@@ -61,7 +59,7 @@ void data_communication(const Mesh &mesh, std::vector<cfd::Field<mix_model, turb
 }
 
 template<MixtureModel mix_model, TurbMethod turb_method>
-__global__ void inner_communication(DZone *zone, DZone *tar_zone, integer i_face, DParameter* param) {
+__global__ void inner_communication(DZone *zone, DZone *tar_zone, integer i_face, DParameter *param) {
   const auto &f = zone->innerface[i_face];
   uint n[3];
   n[0] = blockIdx.x * blockDim.x + threadIdx.x;
@@ -89,7 +87,7 @@ __global__ void inner_communication(DZone *zone, DZone *tar_zone, integer i_face
       zone->cv(idx[0], idx[1], idx[2], l) = ave;
       tar_zone->cv(idx_tar[0], idx_tar[1], idx_tar[2], l) = ave;
     }
-    update_bv_1_point<mix_model,turb_method>(zone,param,idx[0], idx[1], idx[2]);
+    update_bv_1_point<mix_model, turb_method>(zone, param, idx[0], idx[1], idx[2]);
   } else {
     // Else, get the inner value for this block's ghost grid
     for (int l = 0; l < 6; ++l) {
@@ -104,7 +102,8 @@ __global__ void inner_communication(DZone *zone, DZone *tar_zone, integer i_face
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 void
-parallel_communication(const cfd::Mesh &mesh, std::vector<cfd::Field<mix_model, turb_method>> &field, integer step, DParameter* param) {
+parallel_communication(const cfd::Mesh &mesh, std::vector<cfd::Field<mix_model, turb_method>> &field, integer step,
+                       DParameter *param) {
   const int n_block{mesh.n_block};
   const int n_trans{field[0].cv.n_var()}; // we transfer conservative variables here
   const int ngg{mesh[0].ngg};
@@ -180,17 +179,17 @@ parallel_communication(const cfd::Mesh &mesh, std::vector<cfd::Field<mix_model, 
   //Assign the correct value got by MPI receive
   fc_num = 0;
   for (int blk = 0; blk < n_block; ++blk) {
-    auto& B            = mesh[blk];
+    auto &B = mesh[blk];
     const size_t f_num = B.parallel_face.size();
     for (size_t f = 0; f < f_num; ++f) {
-      const auto& fc = B.parallel_face[f];
+      const auto &fc = B.parallel_face[f];
       uint tpb[3], bpg[3];
       for (size_t j = 0; j < 3; ++j) {
         tpb[j] = fc.n_point[j] <= (2 * ngg + 1) ? 1 : 16;
         bpg[j] = (fc.n_point[j] - 1) / tpb[j] + 1;
       }
       dim3 TPB{tpb[0], tpb[1], tpb[2]}, BPG{bpg[0], bpg[1], bpg[2]};
-      assign_data_received<mix_model,turb_method><<<BPG, TPB>>>(field[blk].d_ptr, f, &temp_r[fc_num][0], param);
+      assign_data_received<mix_model, turb_method><<<BPG, TPB>>>(field[blk].d_ptr, f, &temp_r[fc_num][0], param);
       cudaDeviceSynchronize();
       fc_num++;
     }
@@ -204,7 +203,7 @@ parallel_communication(const cfd::Mesh &mesh, std::vector<cfd::Field<mix_model, 
 }
 
 template<MixtureModel mix_model, TurbMethod turb_method>
-__global__ void assign_data_received(cfd::DZone *zone, integer i_face, const real *data, DParameter* param) {
+__global__ void assign_data_received(cfd::DZone *zone, integer i_face, const real *data, DParameter *param) {
   const auto &f = zone->parface[i_face];
   integer n[3];
   n[0] = blockIdx.x * blockDim.x + threadIdx.x;
@@ -225,7 +224,7 @@ __global__ void assign_data_received(cfd::DZone *zone, integer i_face, const rea
     cv(idx[0], idx[1], idx[2], l) = 0.5 * (cv(idx[0], idx[1], idx[2], l) + data[bias + l]);
   }
 
-  update_bv_1_point<mix_model,turb_method>(zone,param,idx[0], idx[1], idx[2]);
+  update_bv_1_point<mix_model, turb_method>(zone, param, idx[0], idx[1], idx[2]);
 
   for (integer ig = 1; ig <= ngg; ++ig) {
     idx[f.face] += f.direction;
@@ -233,7 +232,7 @@ __global__ void assign_data_received(cfd::DZone *zone, integer i_face, const rea
     for (integer l = 0; l < n_var; ++l) {
       cv(idx[0], idx[1], idx[2], l) = data[bias + l];
     }
-    update_bv_1_point<mix_model,turb_method>(zone,param,idx[0], idx[1], idx[2]);
+    update_bv_1_point<mix_model, turb_method>(zone, param, idx[0], idx[1], idx[2]);
   }
 }
 
