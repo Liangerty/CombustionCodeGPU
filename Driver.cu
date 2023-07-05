@@ -84,7 +84,7 @@ void Driver<mix_model, turb_method>::initialize_computation() {
 
   // Second, apply boundary conditions to all boundaries, including face communication between faces
   for (integer b = 0; b < mesh.n_block; ++b) {
-    bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
+    bound_cond.apply_boundary_conditions_1st_step(mesh[b], field[b], param);
   }
   if (myid == 0) {
     printf("Boundary conditions are applied successfully for initialization\n");
@@ -103,18 +103,12 @@ void Driver<mix_model, turb_method>::initialize_computation() {
   }
   cudaDeviceSynchronize();
   // Third, communicate values between processes
-  data_communication<mix_model, turb_method>(mesh, field, parameter, 0);
-  // Currently not implemented, thus the current program can only be used on a single GPU
+  data_communication<mix_model, turb_method>(mesh, field, parameter, 0, param);
 
   if (myid == 0) {
     printf("Finish data transfer.\n");
   }
   cudaDeviceSynchronize();
-//  MPI_Barrier(MPI_COMM_WORLD);
-//  output.print_field(5, 0);
-//  MPI_Barrier(MPI_COMM_WORLD);
-//  MPI_Abort(MPI_COMM_WORLD,1);
-
 
   for (auto b = 0; b < mesh.n_block; ++b) {
     integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
@@ -240,7 +234,6 @@ void Driver<mix_model, turb_method>::steady_simulation() {
     // First, store the value of last step
     if (step % output_screen == 0) {
       for (auto b = 0; b < n_block; ++b) {
-//        store_last_step(field[b].h_ptr);
         store_last_step<<<bpg[b], tpb>>>(field[b].d_ptr);
       }
     }
@@ -270,10 +263,7 @@ void Driver<mix_model, turb_method>::steady_simulation() {
       bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
     }
     // Third, transfer data between and within processes
-    data_communication(mesh, field, parameter, step);
-//    for (auto b = 0; b < n_block; ++b){
-//      update_bv<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
-//    }
+    data_communication(mesh, field, parameter, step, param);
 
     if (mesh.dimension == 2) {
       for (auto b = 0; b < n_block; ++b) {
@@ -287,7 +277,6 @@ void Driver<mix_model, turb_method>::steady_simulation() {
     for (auto b = 0; b < n_block; ++b) {
       integer mx{mesh[b].mx}, my{mesh[b].my}, mz{mesh[b].mz};
       dim3 BPG{(mx + 1) / tpb.x + 1, (my + 1) / tpb.y + 1, (mz + 1) / tpb.z + 1};
-//      dim3 BPG{(mx + ng_1) / tpb.x + 1, (my + ng_1) / tpb.y + 1, (mz + ng_1) / tpb.z + 1};
       update_physical_properties<mix_model, turb_method><<<BPG, tpb>>>(field[b].d_ptr, param);
     }
 

@@ -123,8 +123,8 @@ __device__ void compute_source_and_mut(cfd::DZone *zone, integer i, integer j, i
   // Theoretically, this should be computed after updating the basic variables, but after that we won't need it until now.
   // Besides, we need the velocity gradients in the computation, which are also needed when computing source terms.
   // In order to alleviate the computational burden, we put the computation of mut here.
-  const real rhoK = zone->cv(i, j, k, n_spec + 5);
   const real tke = zone->sv(i, j, k, n_spec);
+  const real rhoK = density * tke;
   const real vorticity = std::sqrt((v_x - u_y) * (v_x - u_y) + (w_x - u_z) * (w_x - u_z) + (w_y - v_z) * (w_y - v_z));
 
   // If wall, mut=0. Else, compute mut as in the if statement.
@@ -149,7 +149,6 @@ __device__ void compute_source_and_mut(cfd::DZone *zone, integer i, integer j, i
     mut = SST::a_1 * rhoK / denominator;
   }
   zone->mut(i, j, k) = mut;
-//  const real mut{zone->mut(i, j, k)};
 
   const real beta = SST::beta_2 + SST::delta_beta * f1;
   if (mut > 1e-25) {
