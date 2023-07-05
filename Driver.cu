@@ -84,7 +84,7 @@ void Driver<mix_model, turb_method>::initialize_computation() {
 
   // Second, apply boundary conditions to all boundaries, including face communication between faces
   for (integer b = 0; b < mesh.n_block; ++b) {
-    bound_cond.apply_boundary_conditions_1st_step(mesh[b], field[b], param);
+    bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
   }
   if (myid == 0) {
     printf("Boundary conditions are applied successfully for initialization\n");
