@@ -7,9 +7,6 @@
 #include "Thermo.cuh"
 
 namespace cfd {
-struct DParameter;
-struct DZone;
-
 template<MixtureModel mix_model, TurbMethod turb_method>
 __device__ void
 reconstruction(real *pv, real *pv_l, real *pv_r, integer idx_shared, DZone *zone, DParameter *param);

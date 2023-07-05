@@ -8,8 +8,6 @@
 #include "gxl_lib/MyString.h"
 
 namespace cfd {
-class Mesh;
-
 template<MixtureModel mix_model = MixtureModel::Air, TurbMethod turb_method = TurbMethod::Laminar>
 void
 initialize_basic_variables(Parameter &parameter, const Mesh &mesh, std::vector<Field<mix_model, turb_method>> &field,

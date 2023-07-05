@@ -14,20 +14,6 @@
 #include "ImplicitTreatmentHPP.cuh"
 
 namespace cfd {
-// Instantiate all possible drivers
-template
-struct Driver<MixtureModel::Air, TurbMethod::Laminar>;
-template
-struct Driver<MixtureModel::Air, TurbMethod::RANS>;
-template
-struct Driver<MixtureModel::Mixture, TurbMethod::Laminar>;
-template
-struct Driver<MixtureModel::Mixture, TurbMethod::RANS>;
-template
-struct Driver<MixtureModel::FR, TurbMethod::Laminar>;
-template
-struct Driver<MixtureModel::FR, TurbMethod::RANS>;
-
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 Driver<mix_model, turb_method>::Driver(Parameter &parameter, Mesh &mesh_):myid(parameter.get_int("myid")), time(),
@@ -166,10 +152,10 @@ void Driver<mix_model, turb_method>::acquire_wall_distance() {
       }
     }
     const integer n_proc{parameter.get_int("n_proc")};
-    integer *n_wall_point = new integer[n_proc];
-    integer n_wall_this = static_cast<integer>(wall_coor.size());
+    auto *n_wall_point = new integer[n_proc];
+    auto n_wall_this = static_cast<integer>(wall_coor.size());
     MPI_Allgather(&n_wall_this, 1, MPI_INT, n_wall_point, 1, MPI_INT, MPI_COMM_WORLD);
-    integer *disp = new integer[n_proc];
+    auto *disp = new integer[n_proc];
     disp[0] = 0;
     for (integer i = 1; i < n_proc; ++i) {
       disp[i] = disp[i - 1] + n_wall_point[i - 1];
@@ -203,7 +189,9 @@ void Driver<mix_model, turb_method>::acquire_wall_distance() {
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 void Driver<mix_model, turb_method>::steady_simulation() {
-  printf("Steady flow simulation.\n");
+  if (myid == 0) {
+    printf("Steady flow simulation.\n");
+  }
   bool converged{false};
   integer step{parameter.get_int("step")};
   integer total_step{parameter.get_int("total_step") + step};
@@ -359,7 +347,7 @@ real Driver<mix_model, turb_method>::compute_residual(integer step) {
     if (!exists(out_dir)) {
       create_directories(out_dir);
     }
-    if (myid==0){
+    if (myid == 0) {
       std::ofstream res_scale_out(out_dir.string() + "/residual_scale.txt");
       res_scale_out << res_scale[0] << '\n' << res_scale[1] << '\n' << res_scale[2] << '\n' << res_scale[3] << '\n';
       res_scale_out.close();
@@ -480,4 +468,19 @@ __global__ void compute_wall_distance(const real *wall_point_coor, DZone *zone, 
   }
   wall_dist = std::sqrt(wall_dist);
 }
+
+// Instantiate all possible drivers
+template
+struct Driver<MixtureModel::Air, TurbMethod::Laminar>;
+template
+struct Driver<MixtureModel::Air, TurbMethod::RANS>;
+template
+struct Driver<MixtureModel::Mixture, TurbMethod::Laminar>;
+template
+struct Driver<MixtureModel::Mixture, TurbMethod::RANS>;
+template
+struct Driver<MixtureModel::FR, TurbMethod::Laminar>;
+template
+struct Driver<MixtureModel::FR, TurbMethod::RANS>;
+
 } // cfd

@@ -150,14 +150,6 @@ public:
    *             \f]
    */
   gxl::Array3D<gxl::Matrix<real, 3, 3, 1>> metric;
-#ifdef GPU
-//  ggxl::Array3D<real> d_x, d_y, d_z;
-//  Boundary *d_bound;
-//  InnerFace *d_innerface;
-//  ParallelFace *d_parface;
-//  ggxl::Array3D<real> d_jac;
-//  ggxl::Array3D<gxl::Matrix<real, 3, 3, 1>> d_metric;
-#endif
 };
 
 class Parameter;
@@ -229,7 +221,5 @@ private:
    * \param ngg number of ghost layers
    */
   void init_parallel_ghost_grid(integer myid, integer ngg);
-
-//  void copy_mesh_to_device();
 };
 }

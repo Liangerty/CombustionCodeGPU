@@ -100,9 +100,6 @@ __global__ void cfd::limit_flow(cfd::DZone *zone, cfd::DParameter *param, intege
           for (integer l = 0; l < zone->n_scal; ++l) {
             updated_var[l + 5] += sv(i1, j1, k1, l);
           }
-//          for (integer l = 0; l < n_spec; ++l) {
-//            updated_var[l + 5] += sv(i1, j1, k1, l);
-//          }
 
           ++kn;
         }
@@ -115,9 +112,6 @@ __global__ void cfd::limit_flow(cfd::DZone *zone, cfd::DParameter *param, intege
       for (integer l = 0; l < n_flow_var + zone->n_scal; ++l) {
         updated_var[l] *= kn_inv;
       }
-//      for (integer l = 0; l < n_flow_var + n_spec; ++l) {
-//        updated_var[l] *= kn_inv;
-//      }
     } else {
       // The surrounding points are all "bad"
       for (integer l = 0; l < 5; ++l) {
@@ -127,9 +121,6 @@ __global__ void cfd::limit_flow(cfd::DZone *zone, cfd::DParameter *param, intege
       for (integer l = 0; l < zone->n_scal; ++l) {
         updated_var[l + 5] = param->limit_flow.sv_inf[l];
       }
-//      for (integer l = 0; l < n_spec; ++l) {
-//        updated_var[l + 5] = param->limit_flow.sv_inf[l];
-//      }
     }
 
     // Assign averaged values for the bad point
@@ -149,10 +140,6 @@ __global__ void cfd::limit_flow(cfd::DZone *zone, cfd::DParameter *param, intege
       sv(i, j, k, l) = updated_var[5 + l];
       cv(i, j, k, 5 + l) = updated_var[0] * updated_var[5 + l];
     }
-//    for (integer l = 0; l < n_spec; ++l) {
-//      sv(i, j, k, l) = updated_var[5 + l];
-//      cv(i, j, k, 5 + l) = updated_var[0] * updated_var[5 + l];
-//    }
     if (n_spec > 0) {
       real mw = 0;
       for (integer l = 0; l < n_spec; ++l) {
@@ -188,9 +175,6 @@ __global__ void cfd::limit_flow(cfd::DZone *zone, cfd::DParameter *param, intege
     }
 
     if (unphysical) {
-      // printf("Unphysical turbulent values appear in process %d, block %d, i = %d, j = %d, k = %d.\n", param->myid,
-      //        blk_id, i, j, k);
-
       real updated_var[n_turb];
       memset(updated_var, 0, n_turb * sizeof(real));
       integer kn{0};

@@ -136,8 +136,6 @@ __global__ void initialize_mut(DZone *zone, DParameter *param) {
   }
 }
 
-__device__ void compute_temperature(int i, int j, int k, const cfd::DParameter *param, cfd::DZone *zone);
-
 template<MixtureModel mix_model, TurbMethod turb_method>
 __global__ void update_cv_and_bv(cfd::DZone *zone, DParameter *param) {
   const integer extent[3]{zone->mx, zone->my, zone->mz};
