@@ -11,13 +11,8 @@
 
 namespace cfd {
 template<MixtureModel mix_model, TurbMethod turb_method>
-struct Field;
-
-template<MixtureModel mix_model, TurbMethod turb_method>
 void data_communication(const Mesh &mesh, std::vector<cfd::Field<mix_model, turb_method>> &field,
                         const Parameter &parameter, integer step, DParameter *param);
-
-struct DZone;
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 __global__ void inner_communication(DZone *zone, DZone *tar_zone, integer i_face, DParameter *param);

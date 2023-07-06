@@ -89,8 +89,7 @@ void Driver<mix_model, turb_method>::initialize_computation() {
   }
   cudaDeviceSynchronize();
   // Third, communicate values between processes
-  data_communication<mix_model,turb_method>(mesh, field, parameter, 0, param);
-  // Currently not implemented, thus the current program can only be used on a single GPU
+  data_communication<mix_model, turb_method>(mesh, field, parameter, 0, param);
 
   if (myid == 0) {
     printf("Finish data transfer.\n");
@@ -252,10 +251,7 @@ void Driver<mix_model, turb_method>::steady_simulation() {
       bound_cond.apply_boundary_conditions(mesh[b], field[b], param);
     }
     // Third, transfer data between and within processes
-    data_communication<mix_model,turb_method>(mesh, field, parameter, step, param);
-//    for (auto b = 0; b < n_block; ++b){
-//      update_bv<mix_model, turb_method><<<bpg[b], tpb>>>(field[b].d_ptr, param);
-//    }
+    data_communication<mix_model, turb_method>(mesh, field, parameter, step, param);
 
     if (mesh.dimension == 2) {
       for (auto b = 0; b < n_block; ++b) {
