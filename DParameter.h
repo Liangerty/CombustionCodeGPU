@@ -21,10 +21,10 @@ struct DParameter {
   integer rans_model = 0;  // The tag for RANS model. 0 - Laminar, 1 - SA, 2 - SST
   integer turb_implicit = 1;    // If we implicitly treat the turbulent source term. By default, implicitly treat(1), else, 0(explicit)
   integer chemSrcMethod = 0;  // For finite rate chemistry, we need to know how to implicitly treat the chemical source
-  real Pr = 0.72;
-  real cfl = 1;
   integer n_spec = 0;
   integer n_scalar = 0;
+  real Pr = 0.72;
+  real cfl = 1;
   real *mw = nullptr;
   ggxl::MatrixDyn<real> high_temp_coeff, low_temp_coeff;
   real *t_low = nullptr, *t_mid = nullptr, *t_high = nullptr;
@@ -39,7 +39,7 @@ struct DParameter {
 private:
   struct LimitFlow {
     // ll for lower limit, ul for upper limit.
-    static constexpr integer max_n_var = 5 + 2;// + MAX_SPEC_NUMBER
+    static constexpr integer max_n_var = 5 + 2;
     real ll[max_n_var];
     real ul[max_n_var];
     real sv_inf[MAX_SPEC_NUMBER + 2];
