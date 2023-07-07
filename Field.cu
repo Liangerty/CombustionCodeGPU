@@ -4,11 +4,12 @@
 template<MixtureModel mix_model, TurbMethod turb_method>
 cfd::Field<mix_model, turb_method>::Field(Parameter &parameter, const Block &block_in): block(block_in) {
   const integer mx{block.mx}, my{block.my}, mz{block.mz}, ngg{block.ngg};
-  const integer n_var{parameter.get_int("n_var")};
+//  const integer n_var{parameter.get_int("n_var")};
+  n_var = parameter.get_int("n_var");
   integer n_scalar{0};
   integer n_other_var{1}; // Default, mach number
 
-  cv.resize(mx, my, mz, n_var, ngg);
+//  cv.resize(mx, my, mz, n_var, ngg);
   bv.resize(mx, my, mz, 6, ngg);
   if constexpr (mix_model == MixtureModel::Mixture) {
     n_scalar += parameter.get_int("n_spec");
@@ -23,7 +24,7 @@ cfd::Field<mix_model, turb_method>::Field(Parameter &parameter, const Block &blo
   }
   sv.resize(mx, my, mz, n_scalar, ngg);
   ov.resize(mx, my, mz, n_other_var, ngg);
-  var_without_ghost_grid.resize(mx, my, mz, 1, 0); // Only to have wall_dist, if more are needed, then add nl.
+//  var_without_ghost_grid.resize(mx, my, mz, 1, 0); // Only to have wall_dist, if more are needed, then add nl.
 }
 
 template<MixtureModel mix_model, TurbMethod turb_method>

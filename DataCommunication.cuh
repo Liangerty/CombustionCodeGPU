@@ -104,7 +104,7 @@ void
 parallel_communication(const cfd::Mesh &mesh, std::vector<cfd::Field<mix_model, turb_method>> &field, integer step,
                        DParameter *param) {
   const int n_block{mesh.n_block};
-  const int n_trans{field[0].cv.n_var()}; // we transfer conservative variables here
+  const int n_trans{field[0].n_var}; // we transfer conservative variables here
   const int ngg{mesh[0].ngg};
   //Add up to the total face number
   size_t total_face = 0;

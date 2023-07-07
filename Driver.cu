@@ -165,6 +165,7 @@ void Driver<mix_model, turb_method>::acquire_wall_distance() {
       total_wall_number += n_wall_point[i];
     }
     std::vector<real> wall_points(total_wall_number, 0);
+    // NOTE: The MPI process here is not examined carefully, if there are mistakes or things hard to understand, examine here.
     MPI_Allgatherv(wall_coor.data(), n_wall_point[myid], MPI_DOUBLE, wall_points.data(), n_wall_point, disp, MPI_DOUBLE,
                    MPI_COMM_WORLD);
     real *wall_corr_gpu = nullptr;

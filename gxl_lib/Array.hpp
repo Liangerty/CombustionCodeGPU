@@ -124,6 +124,65 @@ VectorField3D<T, major>::allocate_memory(int dim1, int dim2, int dim3, int dim4,
   return err;
 }
 
+template<typename T, Major major = Major::ColMajor>
+class VectorField3DHost {
+  int ng{0}, n1{0}, n2{0}, n3{0}, n4{0}, sz{0};
+  std::vector<T> data_;
+  int disp2{0}, disp1{0}, dispt{0};
+public:
+  auto data() const { return data_.data(); }
+
+  auto data() { return data_.data(); }
+
+  /**
+   * \brief Get the l-th variable at position (i,j,k)
+   * \param i x index
+   * \param j y index
+   * \param k z index
+   * \param l variable index in a vector
+   * \return the l-th variable at position (i,j,k)
+   */
+  T &operator()(const int i, const int j, const int k, const int l) {
+    if constexpr (major == Major::RowMajor) {
+      return data_[i * disp1 + j * disp2 + k * n4 + dispt + l];
+    } else {
+      return data_[k * disp1 + j * disp2 + i + dispt + l * sz];
+    }
+  }
+
+  T *operator[](int l) {
+    static_assert(major == Major::ColMajor);
+    return &data_[l * sz];
+  }
+
+  void resize(int ni, int nj, int nk, int nl, int ngg, T &&t = T{});
+
+  int n_var() const { return n4; }
+};
+
+template<typename T, Major major>
+void VectorField3DHost<T, major>::resize(int ni, int nj, int nk, int nl, int ngg, T &&t) {
+  ng = ngg;
+  n1 = ni + 2 * ngg;
+  n2 = nj + 2 * ngg;
+  n3 = nk + 2 * ngg;
+  n4 = nl;
+  sz = n1 * n2 * n3;
+  if constexpr (major == Major::RowMajor) {
+    disp2 = n3 * n4;
+    disp1 = n2 * disp2;
+    dispt = (disp1 + disp2 + n4) * ng;
+  } else {
+    disp2 = n1;
+    disp1 = n2 * disp2;
+    dispt = (disp1 + disp2 + 1) * ng;
+  }
+  data_.resize(n1 * n2 * n3 * n4, t);
+  n1 = ni;
+  n2 = nj;
+  n3 = nk;
+}
+
 }
 #endif
 
