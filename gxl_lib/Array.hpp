@@ -1,7 +1,11 @@
 #pragma once
 #ifdef __CUDACC__
+
 #include <cuda_runtime.h>
+#include <cstdio>
+
 #endif
+
 #include <vector>
 
 enum class Major {
@@ -126,13 +130,18 @@ VectorField3D<T, major>::allocate_memory(int dim1, int dim2, int dim3, int dim4,
 
 template<typename T, Major major = Major::ColMajor>
 class VectorField3DHost {
-  int ng{0}, n1{0}, n2{0}, n3{0}, n4{0}, sz{0};
-  std::vector<T> data_;
   int disp2{0}, disp1{0}, dispt{0};
+  T *data_ = nullptr;
+  int ng{0}, n1{0}, n2{0}, n3{0}, n4{0}, sz{0};
+//  std::vector<T> data_;
 public:
-  auto data() const { return data_.data(); }
+//  explicit VectorField3DHost(int dim1, int dim2, int dim3, int dim4, int n_ghost);
 
-  auto data() { return data_.data(); }
+  auto data() const { return data_; }
+//  auto data() const { return data_.data(); }
+
+  auto data() { return data_; }
+//  auto data() { return data_.data(); }
 
   /**
    * \brief Get the l-th variable at position (i,j,k)
@@ -155,13 +164,13 @@ public:
     return &data_[l * sz];
   }
 
-  void resize(int ni, int nj, int nk, int nl, int ngg, T &&t = T{});
+  void resize(int ni, int nj, int nk, int nl, int ngg);
 
   int n_var() const { return n4; }
 };
 
 template<typename T, Major major>
-void VectorField3DHost<T, major>::resize(int ni, int nj, int nk, int nl, int ngg, T &&t) {
+void VectorField3DHost<T, major>::resize(int ni, int nj, int nk, int nl, int ngg) {
   ng = ngg;
   n1 = ni + 2 * ngg;
   n2 = nj + 2 * ngg;
@@ -177,7 +186,13 @@ void VectorField3DHost<T, major>::resize(int ni, int nj, int nk, int nl, int ngg
     disp1 = n2 * disp2;
     dispt = (disp1 + disp2 + 1) * ng;
   }
-  data_.resize(n1 * n2 * n3 * n4, t);
+  cudaError_t err = cudaHostAlloc(&data_, sz * n4 * sizeof(T), cudaHostAllocDefault);
+  if (err != cudaSuccess) {
+    printf(
+        "The VectorField3DHost isn't allocated by cudaHostAlloc, not enough page-locked memory. Use malloc instead\n");
+    data_ = (real *) malloc(sz * n4 * sizeof(T));
+  }
+//  data_.resize(n1 * n2 * n3 * n4, t);
   n1 = ni;
   n2 = nj;
   n3 = nk;
