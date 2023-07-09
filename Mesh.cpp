@@ -547,24 +547,23 @@ void cfd::Block::trim_abundant_ghost_mesh() {
   }
 }
 
-cfd::Mesh::Mesh(Parameter &parameter) {
+cfd::Mesh::Mesh(Parameter &parameter) : dimension{parameter.get_int("dimension")}, ngg{parameter.get_int("ngg")},
+                                        n_proc{parameter.get_int("n_proc")}, nblk{new integer[n_proc]} {
   const integer myid = parameter.get_int("myid");
   const bool parallel = parameter.get_bool("parallel");
-  const integer ngg{parameter.get_int("ngg")};
   //First read the grid points into memory
-  dimension = parameter.get_int("dimension");
-  read_grid(myid, ngg);
+  read_grid(myid/*, ngg*/);
   parameter.update_parameter("n_block", n_block);
   if (myid == 0) {
     fmt::print("Problem dimension: {}\nTotal grid number: {}\n", dimension, n_grid_total);
   }
 
-  read_boundary(myid, ngg);
+  read_boundary(myid/*, ngg*/);
 
-  read_inner_interface(myid, ngg);
+  read_inner_interface(myid/*, ngg*/);
 
   if (parallel) {
-    read_parallel_interface(myid, ngg);
+    read_parallel_interface(myid/*, ngg*/);
   }
 
   /*Scale the grid to physical units*/
@@ -579,7 +578,7 @@ cfd::Mesh::Mesh(Parameter &parameter) {
   }
 
   /*Initialize the coordinates of ghost grids*/
-  init_ghost_grid(myid, parallel, ngg);
+  init_ghost_grid(myid, parallel/*, ngg*/);
 
   /*Compute the metrics and jacobian values of all grid points*/
   for (auto &b: block) b.compute_jac_metric(myid);
@@ -596,7 +595,7 @@ const cfd::Block &cfd::Mesh::operator[](const size_t i) const {
   return block[i];
 }
 
-void cfd::Mesh::read_grid(const integer myid, const integer ngg) {
+void cfd::Mesh::read_grid(const integer myid/*, const integer ngg*/) {
   std::ifstream grd(fmt::format("./input_files/grid/grid{:>4}.grd", myid), std::ios::in);
   std::string input;
   std::getline(grd, input);
@@ -647,9 +646,34 @@ void cfd::Mesh::read_grid(const integer myid, const integer ngg) {
   //Sum grid number in all processes to the root process
   MPI_Reduce(&n_grid, &n_grid_total, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
   MPI_Bcast(&n_grid_total, 1, MPI_INT, 0, MPI_COMM_WORLD); //Broadcast total grid number to all processes
+
+  // Specify how many blocks there are on each process
+  MPI_Allgather(&n_block, 1, MPI_INT, nblk, 1, MPI_INT, MPI_COMM_WORLD);
+  auto *disp = new integer[n_proc];
+  disp[0] = 0;
+  n_block_total = nblk[0];
+  for (int i = 1; i < n_proc; ++i) {
+    disp[i] = disp[i - 1] + nblk[i - 1];
+    n_block_total += nblk[i];
+  }
+
+  mx_blk = new integer[n_block_total];
+  my_blk = new integer[n_block_total];
+  mz_blk = new integer[n_block_total];
+  auto *m_this = new integer[n_block * 3];
+  integer *mx_this = m_this, *my_this = &mx_this[n_block], *mz_this = &my_this[n_block];
+  for (int i = 0; i < n_block; ++i) {
+    mx_this[i] = block[i].mx;
+    my_this[i] = block[i].my;
+    mz_this[i] = block[i].mz;
+  }
+  MPI_Allgatherv(mx_this, n_block, MPI_INT, mx_blk, nblk, disp, MPI_INT, MPI_COMM_WORLD);
+  MPI_Allgatherv(my_this, n_block, MPI_INT, my_blk, nblk, disp, MPI_INT, MPI_COMM_WORLD);
+  MPI_Allgatherv(mz_this, n_block, MPI_INT, mz_blk, nblk, disp, MPI_INT, MPI_COMM_WORLD);
+  delete[]m_this;
 }
 
-void cfd::Mesh::read_boundary(integer myid, const integer ngg) {
+void cfd::Mesh::read_boundary(integer myid/*, const integer ngg*/) {
   std::ifstream grd(fmt::format("./input_files/boundary_condition/boundary{:>4}.txt", myid), std::ios::in);
   std::string input{};
   for (integer blk = 0; blk < n_block; ++blk) {
@@ -671,7 +695,7 @@ void cfd::Mesh::read_boundary(integer myid, const integer ngg) {
   }
 }
 
-void cfd::Mesh::read_inner_interface(const integer myid, integer ngg) {
+void cfd::Mesh::read_inner_interface(const integer myid/*, integer ngg*/) {
   std::ifstream grd(fmt::format("./input_files/boundary_condition/inner{:>4}.txt", myid), std::ios::in);
   std::string input{};
   // Read how many inner faces there are in each block and store them in @n_face.
@@ -705,7 +729,7 @@ void cfd::Mesh::read_inner_interface(const integer myid, integer ngg) {
   delete[]n_face;
 }
 
-void cfd::Mesh::read_parallel_interface(const integer myid, integer ngg) {
+void cfd::Mesh::read_parallel_interface(const integer myid/*, integer ngg*/) {
   std::ifstream grd(fmt::format("./input_files/boundary_condition/parallel{:>4}.txt", myid), std::ios::in);
   std::string input{};
   integer blk_num1{0}, tot_face{0};
@@ -751,7 +775,7 @@ void cfd::Mesh::scale(const real scale) {
   }
 }
 
-void cfd::Mesh::init_ghost_grid(const integer myid, const bool parallel, const integer ngg) {
+void cfd::Mesh::init_ghost_grid(const integer myid, const bool parallel/*, const integer ngg*/) {
   //Add ghost grid except corners
   for (integer blk = 0; blk < n_block; ++blk) {
     auto &B = block[blk];
@@ -824,7 +848,7 @@ void cfd::Mesh::init_ghost_grid(const integer myid, const bool parallel, const i
   init_inner_ghost_grid();
   //If we use parallel computation, assign the ghost grid of parallel boundaries by MPI
   if (parallel) {
-    init_parallel_ghost_grid(myid, ngg);
+    init_parallel_ghost_grid(myid/*, ngg*/);
   }
   /*Assign ghost grids on the edges and at the corners by using parallelogram hypothesis*/
   for (integer blk = 0; blk < n_block; ++blk) {
@@ -957,7 +981,7 @@ void cfd::Mesh::init_inner_ghost_grid() {
   }
 }
 
-void cfd::Mesh::init_parallel_ghost_grid(const integer myid, const integer ngg) {
+void cfd::Mesh::init_parallel_ghost_grid(const integer myid/*, const integer ngg*/) {
   //Add up to the total face number
   size_t total_face = 0;
   for (integer m = 0; m < n_block; ++m) {

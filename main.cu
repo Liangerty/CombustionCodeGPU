@@ -3,6 +3,7 @@
 #include "Parameter.h"
 #include "Mesh.h"
 #include "Driver.cuh"
+#include "MPIIO.hpp"
 
 int main(int argc, char *argv[]) {
   cfd::MpiParallel mpi_parallel(&argc, &argv);
@@ -33,6 +34,8 @@ int main(int argc, char *argv[]) {
         cfd::Driver<MixtureModel::Mixture, TurbMethod::RANS> driver(parameter, mesh);
         driver.initialize_computation();
         driver.simulate();
+        cfd::MPIIO<MixtureModel::Mixture, TurbMethod::RANS> mpiio(mpi_parallel.my_id, mesh, driver.field, parameter,
+                                                                  driver.spec, 0);
       }
     } else {
       // Laminar
