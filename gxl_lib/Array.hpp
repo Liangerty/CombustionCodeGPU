@@ -98,7 +98,8 @@ public:
 
   T *operator[](int l) {
     static_assert(major == Major::ColMajor);
-    return &val[l * sz];
+    return val + l * sz;
+//    return &val[l * sz];
   }
 
   T *data() { return val; }
