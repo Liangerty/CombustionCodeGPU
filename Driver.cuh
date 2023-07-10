@@ -44,7 +44,6 @@ public:
 #endif
   std::array<real, 4> res{1, 1, 1, 1};
   std::array<real, 4> res_scale{1, 1, 1, 1};
-  Output<mix_model, turb_method> output;
 };
 
 template<integer N>

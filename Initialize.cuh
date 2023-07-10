@@ -59,13 +59,11 @@ initialize_basic_variables(Parameter &parameter, const Mesh &mesh, std::vector<F
   switch (init_method) {
     case 0:initialize_from_start(parameter, mesh, field, species);
       break;
-    case 1:
-      read_flowfield(parameter, mesh, field, species);
+    case 1:read_flowfield(parameter, mesh, field, species);
       break;
     default:printf("The initialization method is unknown, use freestream value to initialize by default.\n");
       initialize_from_start(parameter, mesh, field, species);
   }
-//  MPIIO<mix_model, turb_method> mpiio(parameter.get_int("myid"), mesh, field, parameter, species, 0);
 }
 
 template<MixtureModel mix_model, TurbMethod turb_method>
@@ -348,17 +346,13 @@ read_flowfield(cfd::Parameter &parameter, const cfd::Mesh &mesh, std::vector<Fie
   MPI_Offset offset{0};
   MPI_Status status;
 
-  std::string magic_number{gxl::read_str_MPI_ver(fp, offset, 8)};
-  int32_t byte_order{1};
-  MPI_File_read_at(fp, offset, &byte_order, 1, MPI_INT32_T, &status);
-  offset += status.count_lo;
-  int32_t file_type{0};
-  MPI_File_read_at(fp, offset, &file_type, 1, MPI_INT32_T, &status);
-  offset += status.count_lo;
-  std::string solution_file{gxl::read_str_from_plt_MPI_ver(fp, offset)};
+  // Magic number, 8 bytes + byte order + file type
+  offset += 16;
+  // "solution file"
+  gxl::read_str_from_plt_MPI_ver(fp, offset);
   integer n_var_old{5};
   MPI_File_read_at(fp, offset, &n_var_old, 1, MPI_INT, &status);
-  offset += status.count_lo;
+  offset += 4;
   std::vector<std::string> var_name;
   var_name.resize(n_var_old);
   for (size_t i = 0; i < n_var_old; ++i) {
@@ -382,19 +376,16 @@ read_flowfield(cfd::Parameter &parameter, const cfd::Mesh &mesh, std::vector<Fie
     offset += 36;
     // For ordered zone, specify IMax, JMax, KMax
     MPI_File_read_at(fp, offset, &mx[b], 1, MPI_INT, &status);
-    offset += status.count_lo;
+    offset += 4;
     MPI_File_read_at(fp, offset, &my[b], 1, MPI_INT, &status);
-    offset += status.count_lo;
+    offset += 4;
     MPI_File_read_at(fp, offset, &mz[b], 1, MPI_INT, &status);
-    offset += status.count_lo;
+    offset += 4;
     // 11. For all zone types (repeat for each Auxiliary data name/value pair), no more data
     offset += 4;
   }
   // Read the EOHMARKER
-  float marker{0.0f};
-  constexpr float eoh_marker{357.0f};
-  MPI_File_read_at(fp, offset, &marker, 1, MPI_FLOAT, &status);
-  offset += status.count_lo;
+  offset += 4;
 
 
   std::vector<std::string> zone_name;
@@ -495,7 +486,7 @@ read_flowfield(cfd::Parameter &parameter, const cfd::Mesh &mesh, std::vector<Fie
 
   std::ifstream step_file{"output/message/step.txt"};
   integer step{0};
-  step_file>>step;
+  step_file >> step;
   step_file.close();
   parameter.update_parameter("step", step);
 
