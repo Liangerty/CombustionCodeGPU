@@ -12,6 +12,8 @@ namespace cfd {
 
 void write_str(const char *str, MPI_File &file, MPI_Offset &offset);
 
+void write_str_without_null(const char *str, MPI_File &file, MPI_Offset &offset);
+
 //std::string read_str(MPI_File *file);
 
 template<MixtureModel mix_model, TurbMethod turb_method>
@@ -60,6 +62,9 @@ template<MixtureModel mix_model, TurbMethod turb_method>
 void MPIIO<mix_model, turb_method>::write_header() {
   const std::filesystem::path out_dir("output/field");
   MPI_File fp;
+  // Question: Should I use MPI_MODE_CREATE only here?
+  // If a previous simulation has a larger file size than the current one, the way we write to the file is offset,
+  // then the larger part would not be accessed anymore, which may results in a mistake.
   MPI_File_open(MPI_COMM_WORLD, (out_dir.string() + "/flowfield.plt").c_str(), MPI_MODE_CREATE | MPI_MODE_WRONLY,
                 MPI_INFO_NULL, &fp);
   MPI_Status status;
@@ -74,8 +79,7 @@ void MPIIO<mix_model, turb_method>::write_header() {
     // V112 / V191. V112 was introduced in 2009 while V191 in 2019. They are different only in poly data, so no
     // difference is related to us. For common use, we use V112.
     constexpr auto magic_number{"#!TDV112"};
-    MPI_File_write_at(fp, offset, &magic_number, 1, MPI_DOUBLE, &status);
-    offset += 8;
+    write_str_without_null(magic_number, fp, offset);
 
     // ii. Integer value of 1
     constexpr int32_t byte_order{1};
@@ -241,8 +245,8 @@ void MPIIO<mix_model, turb_method>::write_common_data_section() {
     offset += 8;
     MPI_File_write_at(fp, offset, &max_val, 1, MPI_DOUBLE, &status);
     offset += 8;
-    min_val=b.y(-ngg, -ngg, -ngg);
-    max_val=b.y(-ngg, -ngg, -ngg);
+    min_val = b.y(-ngg, -ngg, -ngg);
+    max_val = b.y(-ngg, -ngg, -ngg);
     for (int k = -ngg; k < mz + ngg; ++k) {
       for (int j = -ngg; j < my + ngg; ++j) {
         for (int i = -ngg; i < mx + ngg; ++i) {
@@ -255,8 +259,8 @@ void MPIIO<mix_model, turb_method>::write_common_data_section() {
     offset += 8;
     MPI_File_write_at(fp, offset, &max_val, 1, MPI_DOUBLE, &status);
     offset += 8;
-    min_val=b.z(-ngg, -ngg, -ngg);
-    max_val=b.z(-ngg, -ngg, -ngg);
+    min_val = b.z(-ngg, -ngg, -ngg);
+    max_val = b.z(-ngg, -ngg, -ngg);
     for (int k = -ngg; k < mz + ngg; ++k) {
       for (int j = -ngg; j < my + ngg; ++j) {
         for (int i = -ngg; i < mx + ngg; ++i) {
@@ -269,27 +273,9 @@ void MPIIO<mix_model, turb_method>::write_common_data_section() {
     offset += 8;
     MPI_File_write_at(fp, offset, &max_val, 1, MPI_DOUBLE, &status);
     offset += 8;
-//    const std::vector<gxl::Array3D<double>> &vars{b.x, b.y, b.z};
-//    // Potential optimization: the x/y/z coordinates are fixed, thus their max/min values can be saved instead of comparing them every time.
-//    for (auto &var: vars) {
-//      const auto& var=b.x;
-//      double min_val{var(-ngg, -ngg, -ngg)}, max_val{var(-ngg, -ngg, -ngg)};
-//      for (int k = -ngg; k < mz + ngg; ++k) {
-//        for (int j = -ngg; j < my + ngg; ++j) {
-//          for (int i = -ngg; i < mx + ngg; ++i) {
-//            min_val = std::min(min_val, var(i, j, k));
-//            max_val = std::max(max_val, var(i, j, k));
-//          }
-//        }
-//      }
-//      MPI_File_write_at(fp, offset, &min_val, 1, MPI_DOUBLE, &status);
-//      offset += 8;
-//      MPI_File_write_at(fp, offset, &max_val, 1, MPI_DOUBLE, &status);
-//      offset += 8;
-//    }
     for (int l = 0; l < 6; ++l) {
-      min_val=v.bv(-ngg, -ngg, -ngg, l);
-      max_val=v.bv(-ngg, -ngg, -ngg, l);
+      min_val = v.bv(-ngg, -ngg, -ngg, l);
+      max_val = v.bv(-ngg, -ngg, -ngg, l);
       for (int k = -ngg; k < mz + ngg; ++k) {
         for (int j = -ngg; j < my + ngg; ++j) {
           for (int i = -ngg; i < mx + ngg; ++i) {
@@ -303,8 +289,8 @@ void MPIIO<mix_model, turb_method>::write_common_data_section() {
       MPI_File_write_at(fp, offset, &max_val, 1, MPI_DOUBLE, &status);
       offset += 8;
     }
-    min_val=v.ov(-ngg, -ngg, -ngg, 0);
-    max_val=v.ov(-ngg, -ngg, -ngg, 0);
+    min_val = v.ov(-ngg, -ngg, -ngg, 0);
+    max_val = v.ov(-ngg, -ngg, -ngg, 0);
     for (int k = -ngg; k < mz + ngg; ++k) {
       for (int j = -ngg; j < my + ngg; ++j) {
         for (int i = -ngg; i < mx + ngg; ++i) {
@@ -366,10 +352,6 @@ void MPIIO<mix_model, turb_method>::write_common_data_section() {
     offset += lsize[0] * lsize[1] * lsize[2] * 8;
     MPI_File_write_at(fp, offset, b.z.data(), 1, ty, &status);
     offset += lsize[0] * lsize[1] * lsize[2] * 8;
-//    for (auto &var: vars) {
-//      MPI_File_write_at(fp, offset, var.data(), 1, ty, &status);
-//      offset += lsize[0] * lsize[1] * lsize[2] * 8;
-//    }
     for (int l = 0; l < 6; ++l) {
       auto var = v.bv[l];
       MPI_File_write_at(fp, offset, var, 1, ty, &status);
