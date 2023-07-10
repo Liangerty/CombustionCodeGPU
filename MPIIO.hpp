@@ -305,7 +305,7 @@ void MPIIO<mix_model, turb_method>::write_common_data_section() {
     MPI_File_write_at(fp, offset, &max_val, 1, MPI_DOUBLE, &status);
     offset += 8;
     // scalar variables. Y0-Y_{Ns-1}, k, omega, z, z_prime
-    const integer n_scalar{field[0].h_ptr->n_scal};
+    const integer n_scalar{parameter.get_int("n_scalar")};
     for (int l = 0; l < n_scalar; ++l) {
       min_val = v.sv(-ngg, -ngg, -ngg, l);
       max_val = v.sv(-ngg, -ngg, -ngg, l);

@@ -63,6 +63,8 @@ int main(int argc, char *argv[]) {
       cfd::Driver<MixtureModel::Air, TurbMethod::Laminar> driver(parameter, mesh);
       driver.initialize_computation();
       driver.simulate();
+      cfd::MPIIO<MixtureModel::Air, TurbMethod::Laminar> mpiio(mpi_parallel.my_id, mesh, driver.field, parameter,
+                                                                driver.spec, 0);
     }
   }
 
