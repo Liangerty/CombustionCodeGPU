@@ -47,6 +47,13 @@ void
 initialize_basic_variables(Parameter &parameter, const Mesh &mesh, std::vector<Field<mix_model, turb_method>> &field,
                            Species &species) {
   const integer init_method = parameter.get_int("initial");
+  // No matter which method is used to initialize the flowfield,
+  // the default inflow is first read and initialize the inf parameters.
+  // Otherwise, for simulations that begin from previous simulations,
+  // processes other than the one containing the inflow plane would have no info about inf parameters.
+  const std::string default_init = parameter.get_string("default_init");
+  Inflow<mix_model, turb_method> default_inflow(default_init, species, parameter);
+
   switch (init_method) {
     case 0:initialize_from_start(parameter, mesh, field, species);
       break;

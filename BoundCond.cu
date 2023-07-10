@@ -2,6 +2,7 @@
 #include "Field.h"
 #include "FieldOperation.cuh"
 #include "SST.cuh"
+#include "Parallel.h"
 
 #ifdef GPU
 namespace cfd {
@@ -265,6 +266,7 @@ DBoundCond<mix_model, turb_method>::initialize_bc_on_GPU(Mesh &mesh, std::vector
 
   link_bc_to_boundaries(mesh, field);
 
+  MpiParallel::barrier();
   if (parameter.get_int("myid") == 0) {
     printf("Finish setting up boundary conditions.\n");
   }
