@@ -16,10 +16,9 @@
 namespace cfd {
 
 template<MixtureModel mix_model, TurbMethod turb_method>
-Driver<mix_model, turb_method>::Driver(Parameter &parameter, Mesh &mesh_):myid(parameter.get_int("myid")), time(),
-                                                                          mesh(mesh_), parameter(parameter),
-                                                                          spec(parameter), reac(parameter),
-                                                                          output(myid, mesh_, field, parameter, spec) {
+Driver<mix_model, turb_method>::Driver(Parameter &parameter, Mesh &mesh_):
+    myid(parameter.get_int("myid")), time(), mesh(mesh_), parameter(parameter),
+    spec(parameter), reac(parameter), output(myid, mesh_, field, parameter, spec) {
   // Allocate the memory for every block
   for (integer blk = 0; blk < mesh.n_block; ++blk) {
     field.emplace_back(parameter, mesh[blk]);
@@ -207,6 +206,8 @@ void Driver<mix_model, turb_method>::steady_simulation() {
   const integer output_screen = parameter.get_int("output_screen");
   const integer output_file = parameter.get_int("output_file");
 
+  MPIIO<mix_model, turb_method> mpiio(myid, mesh, field, parameter, spec, 0);
+
   dim3 tpb{8, 8, 4};
   if (mesh.dimension == 2) {
     tpb = {16, 16, 1};
@@ -284,6 +285,7 @@ void Driver<mix_model, turb_method>::steady_simulation() {
     cudaDeviceSynchronize();
     if (step % output_file == 0 || converged) {
       output.print_field(step);
+      mpiio.print_field(step);
 //      post_process();
     }
   }

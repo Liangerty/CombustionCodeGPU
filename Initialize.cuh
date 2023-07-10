@@ -493,6 +493,12 @@ read_flowfield(cfd::Parameter &parameter, const cfd::Mesh &mesh, std::vector<Fie
     }
   }
 
+  std::ifstream step_file{"output/message/step.txt"};
+  integer step{0};
+  step_file>>step;
+  step_file.close();
+  parameter.update_parameter("step", step);
+
   if (parameter.get_int("myid") == 0) {
     printf("Flowfield is initialized from previous simulation results.\n");
   }
