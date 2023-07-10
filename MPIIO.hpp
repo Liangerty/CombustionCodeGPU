@@ -171,6 +171,7 @@ void MPIIO<mix_model, turb_method>::write_header() {
     offset_header = offset;
   }
   MPI_Bcast(&offset_header, 1, MPI_INT64_T, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&n_var, 1, MPI_INT32_T, 0, MPI_COMM_WORLD);
   MPI_File_close(&fp);
 }
 
@@ -197,7 +198,7 @@ template<MixtureModel mix_model, TurbMethod turb_method>
 void MPIIO<mix_model, turb_method>::write_common_data_section() {
   const std::filesystem::path out_dir("output/field");
   MPI_File fp;
-  MPI_File_open(MPI_COMM_WORLD, (out_dir.string() + "/flowfield.plt").c_str(), MPI_MODE_CREATE | MPI_MODE_WRONLY,
+  MPI_File_open(MPI_COMM_WORLD, (out_dir.string() + "/flowfield.plt").c_str(), MPI_MODE_WRONLY,
                 MPI_INFO_NULL, &fp);
   MPI_Status status;
 
@@ -342,36 +343,40 @@ void MPIIO<mix_model, turb_method>::write_common_data_section() {
     // 7. Zone Data.
     MPI_Datatype ty;
     integer lsize[3]{mx + 2 * ngg, my + 2 * ngg, mz + 2 * ngg};
+    const auto memsz = lsize[0] * lsize[1] * lsize[2] * 8;
     integer memsize[3]{mx + 2 * b.ngg, my + 2 * b.ngg, mz + 2 * b.ngg};
     integer start_idx[3]{b.ngg - ngg, b.ngg - ngg, b.ngg - ngg};
     MPI_Type_create_subarray(3, memsize, lsize, start_idx, MPI_ORDER_FORTRAN, MPI_DOUBLE, &ty);
     MPI_Type_commit(&ty);
     MPI_File_write_at(fp, offset, b.x.data(), 1, ty, &status);
-    offset += lsize[0] * lsize[1] * lsize[2] * 8;
+    offset += memsz;
     MPI_File_write_at(fp, offset, b.y.data(), 1, ty, &status);
-    offset += lsize[0] * lsize[1] * lsize[2] * 8;
+    offset += memsz;
     MPI_File_write_at(fp, offset, b.z.data(), 1, ty, &status);
-    offset += lsize[0] * lsize[1] * lsize[2] * 8;
+    offset += memsz;
     for (int l = 0; l < 6; ++l) {
       auto var = v.bv[l];
       MPI_File_write_at(fp, offset, var, 1, ty, &status);
-      offset += lsize[0] * lsize[1] * lsize[2] * 8;
+      offset += memsz;
     }
     auto var = v.ov[0];
     MPI_File_write_at(fp, offset, var, 1, ty, &status);
-    offset += lsize[0] * lsize[1] * lsize[2] * 8;
+    offset += memsz;
     for (int l = 0; l < field[0].n_var - 5; ++l) {
       var = v.sv[l];
       MPI_File_write_at(fp, offset, var, 1, ty, &status);
-      offset += lsize[0] * lsize[1] * lsize[2] * 8;
+      offset += memsz;
     }
     // if turbulent, mut
     if constexpr (turb_method == TurbMethod::RANS || turb_method == TurbMethod::LES) {
       var = v.ov[1];
       MPI_File_write_at(fp, offset, var, 1, ty, &status);
-      offset += lsize[0] * lsize[1] * lsize[2] * 8;
+      offset += memsz;
     }
   }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_File_close(&fp);
 }
 
 template<MixtureModel mix_model, TurbMethod turb_method>

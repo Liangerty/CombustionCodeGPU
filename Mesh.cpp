@@ -671,6 +671,17 @@ void cfd::Mesh::read_grid(const integer myid/*, const integer ngg*/) {
   MPI_Allgatherv(my_this, n_block, MPI_INT, my_blk, nblk, disp, MPI_INT, MPI_COMM_WORLD);
   MPI_Allgatherv(mz_this, n_block, MPI_INT, mz_blk, nblk, disp, MPI_INT, MPI_COMM_WORLD);
   delete[]m_this;
+
+//  if (myid == 0) {
+//    fmt::print("There are {} blocks in all, the block number in each process is:\n", n_block_total);
+//    for (int i = 0; i < n_proc; ++i) {
+//      fmt::print("{}\n", n_block);
+//    }
+//    fmt::print("The dimension of the blocks are:\n");
+//    for (int i = 0; i < n_block_total; ++i) {
+//      fmt::print("Block {}:, mx = {}, my = {}, mz = {}\n", i, mx_blk[i], my_blk[i], mz_blk[i]);
+//    }
+//  }
 }
 
 void cfd::Mesh::read_boundary(integer myid/*, const integer ngg*/) {
