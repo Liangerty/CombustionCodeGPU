@@ -3,7 +3,6 @@
 #include "Parameter.h"
 #include "Mesh.h"
 #include "Driver.cuh"
-#include "MPIIO.hpp"
 
 int main(int argc, char *argv[]) {
   cfd::MpiParallel mpi_parallel(&argc, &argv);

@@ -33,7 +33,7 @@ std::vector<integer>
 identify_variable_labels(cfd::Parameter &parameter, std::vector<std::string> &var_name, Species &species,
                          std::array<integer, 2> &old_data_info);
 
-void read_one_useless_variable(FILE *fp, integer mx, integer my, integer mz, integer data_format);
+//void read_one_useless_variable(FILE *fp, integer mx, integer my, integer mz, integer data_format);
 
 template<MixtureModel mix_model, TurbMethod turb_method>
 void initialize_spec_from_inflow(cfd::Parameter &parameter, const cfd::Mesh &mesh,
