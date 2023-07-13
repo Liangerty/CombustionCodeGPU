@@ -6,73 +6,15 @@
 #include "Element.h"
 #include <cmath>
 
-//cfd::Species::Species(Parameter &parameter) {
-//  parameter.update_parameter("n_spec", 0);
-//  if (parameter.get_bool("species")) {
-//    std::ifstream comb_mech("./input_files/" + parameter.get_string("mechanism_file"));
-//    std::string input{}, key{};
-//    gxl::getline(comb_mech, input);  // Elements
-//    gxl::getline(comb_mech, input);  //--------
-//    gxl::getline(comb_mech, input);  //$N_e$ elements
-//    std::istringstream line(input);
-//    int n_elem{0};
-//    line >> n_elem;
-//    gxl::getline(comb_mech, input);  //------
-//    int counter{0};
-//    while (gxl::getline(comb_mech, input, gxl::Case::upper)) {
-//      gxl::to_stringstream(input, line);
-//      line >> key;
-//      if (key == "SPECIES") break;
-//      elem_list.emplace(key, counter++);
-//      while (line >> key) elem_list.emplace(key, counter++);
-//    }
-//
-//    gxl::getline(comb_mech, input);             //------------------
-//    gxl::getline_to_stream(comb_mech, input, line);  //$N_s$ Species
-//    int num_spec{0};
-//    line >> num_spec;
-//    set_nspec(num_spec, n_elem);
-//    gxl::getline(comb_mech, input);  //------------------
-//    parameter.update_parameter("n_spec", num_spec);
-//    parameter.update_parameter("n_var", parameter.get_int("n_var") + num_spec);
-//    parameter.update_parameter("n_scalar", parameter.get_int("n_scalar") + num_spec);
-//
-//    counter = 0;
-//    while (gxl::getline_to_stream(comb_mech, input, line, gxl::Case::upper)) {
-//      line >> key;
-//      if (key == "REACTION") break;
-//      if (counter >= num_spec) continue;
-//      register_spec(key, counter);
-//      while (line >> key && counter < num_spec) register_spec(key, counter);
-//    }
-//    comb_mech.close();
-//
-//    read_therm(parameter);
-//    read_tran(parameter);
-//
-//    if (parameter.get_int("myid") == 0) {
-//      fmt::print("Mixture composed of {} species will be simulated.\n", n_spec);
-//      integer counter_spec{0};
-//      for (auto &[name, label]: spec_list) {
-//        fmt::print("{}\t", name);
-//        ++counter_spec;
-//        if (counter_spec % 10 == 0) {
-//          fmt::print("\n");
-//        }
-//      }
-//      fmt::print("\n");
-//    }
-//  }
-//}
 cfd::Species::Species(Parameter &parameter) {
   parameter.update_parameter("n_spec", 0);
   if (parameter.get_bool("species")) {
-    std::ifstream comb_mech("./input_files/" + parameter.get_string("mechanism_file"));
+    std::ifstream file("./input_files/" + parameter.get_string("mechanism_file"));
     std::string input{};
-    while (comb_mech >> input) {
+    while (file >> input) {
       if (input[0] == '!') {
         // This line is comment
-        std::getline(comb_mech, input);
+        std::getline(file, input);
         continue;
       }
       if (input == "ELEMENTS" || input == "ELEM") {
@@ -83,10 +25,10 @@ cfd::Species::Species(Parameter &parameter) {
     }
     // Read elements
     int n_elem{0};
-    while (comb_mech >> input) {
+    while (file >> input) {
       if (input[0] == '!') {
         // This line is comment
-        std::getline(comb_mech, input);
+        std::getline(file, input);
         continue;
       }
       gxl::to_upper(input);
@@ -98,10 +40,10 @@ cfd::Species::Species(Parameter &parameter) {
     // Species
     int num_spec{0};
     bool has_therm{false};
-    while (comb_mech >> input) {
+    while (file >> input) {
       if (input[0] == '!') {
         // This line is comment
-        std::getline(comb_mech, input);
+        std::getline(file, input);
         continue;
       }
       gxl::to_upper(input);
@@ -120,15 +62,17 @@ cfd::Species::Species(Parameter &parameter) {
     parameter.update_parameter("n_var", parameter.get_int("n_var") + num_spec);
     parameter.update_parameter("n_scalar", parameter.get_int("n_scalar") + num_spec);
 
-    if (has_therm) {
-      read_therm(comb_mech);
-      comb_mech.close();
-    } else {
-      comb_mech.close();
-      std::ifstream therm_dat("./input_files/" + parameter.get_string("therm_file"));
-      read_therm(therm_dat);
+    if (!has_therm) {
+      file.close();
+      file.open("./input_files/" + parameter.get_string("therm_file"));
     }
-    read_tran(parameter);
+    bool has_trans = read_therm(file, has_therm);
+
+    if (!has_trans) {
+      file.close();
+      file.open("input_files/" + parameter.get_string("transport_file"));
+    }
+    read_tran(file);
 
     if (parameter.get_int("myid") == 0) {
       fmt::print("Mixture composed of {} species will be simulated.\n", n_spec);
@@ -183,33 +127,51 @@ void cfd::Species::set_nspec(integer n_sp, integer n_elem) {
   partition_fun.resize(n_sp, n_sp);
 }
 
-void cfd::Species::register_spec(const std::string &name, integer &index) {
-  spec_list.emplace(name, index);
-  ++index;
-}
-
-void cfd::Species::read_therm(Parameter &parameter) {
-  std::ifstream therm_dat("./input_files/" + parameter.get_string("therm_file"));
+bool cfd::Species::read_therm(std::ifstream &therm_dat, bool read_from_comb_mech) {
   std::string input{};
-  gxl::read_until(therm_dat, input, "THERMO", gxl::Case::upper);  // "THERMO"
-  std::getline(therm_dat, input);  //$T_low$ $T_mid$ $T_high$
-  std::istringstream line(input);
-  double T_low{300}, T_mid{1000}, T_high{5000};
-  line >> T_low >> T_mid >> T_high;
-  t_low.resize(n_spec, T_low);
-  t_mid.resize(n_spec, T_mid);
-  t_high.resize(n_spec, T_high);
-
-  std::string key{};
-  gxl::getline_to_stream(therm_dat, input, line, gxl::Case::upper);
-  line >> key;
-  int n_read{0};
-  while (key != "END" && n_read < n_spec) {
-    if (key == "!" || input[0] == '!' || input.empty()) {
-      gxl::getline_to_stream(therm_dat, input, line, gxl::Case::upper);
-      line >> key;
+  if (!read_from_comb_mech) {
+    gxl::read_until(therm_dat, input, "THERMO", gxl::Case::upper);  // "THERMO"
+  }
+  while (std::getline(therm_dat, input)) {
+    if (input[0] == '!' || input.empty()) {
       continue;
     }
+    std::istringstream line(input);
+    real T_low{300}, T_mid{1000}, T_high{5000};
+    line >> T_low >> T_mid >> T_high;
+    t_low.resize(n_spec, T_low);
+    t_mid.resize(n_spec, T_mid);
+    t_high.resize(n_spec, T_high);
+    break;
+  }
+
+  std::string key{};
+  int n_read{0};
+  std::vector<int> have_read;
+  std::istringstream line(input);
+  bool has_trans{false};
+  while (gxl::getline_to_stream(therm_dat, input, line, gxl::Case::upper)) {
+    if (input[0] == '!' || input.empty()) {
+      continue;
+    }
+    line >> key;
+    // If the keyword is "END", just read the next line, if it's eof, then we won't come into this loop.
+    // Else, a keyword "REACTIONS" or "TRANSPORT" may be encountered.
+    if (key == "END") {
+      if (n_read < n_spec) {
+        fmt::print("The thermodynamic data aren't enough. We need {} species info but only {} are supplied.\n", n_spec,
+                   n_read);
+      }
+      continue;
+    }
+    if (key == "REACTIONS") break;
+    if (key == "TRANSPORT" || key == "TRAN") {
+      has_trans = true;
+      break;
+    }
+    if (n_read >= n_spec) continue;
+
+    // Let us read the species.
     key.assign(input, 0, 18);
     gxl::to_stringstream(key, line);
     line >> key;
@@ -222,6 +184,22 @@ void cfd::Species::read_therm(Parameter &parameter) {
       continue;
     }
     const int curr_sp = spec_list.at(key);
+    // If the species info has been read, then the second set of parameters are ignored.
+    bool read{false};
+    for (auto ss: have_read) {
+      if (ss == curr_sp) {
+        read = true;
+        break;
+      }
+    }
+    if (read) {
+      gxl::getline(therm_dat, input);
+      gxl::getline(therm_dat, input);
+      gxl::getline(therm_dat, input);
+      gxl::getline_to_stream(therm_dat, input, line, gxl::Case::upper);
+      line >> key;
+      continue;
+    }
 
     key.assign(input, 45, 10);  // T_low
     t_low[curr_sp] = std::stod(key);
@@ -303,161 +281,55 @@ void cfd::Species::read_therm(Parameter &parameter) {
     low_temp_coeff(curr_sp, 5) = c3;
     low_temp_coeff(curr_sp, 6) = c4;
 
-    gxl::getline_to_stream(therm_dat, input, line);
-    line >> key;
-
+    have_read.push_back(curr_sp);
     ++n_read;
   }
-  // fmt::print("Thermodynamic properties are read successfully for {} species.\n", n_spec);
-  therm_dat.close();
+  return has_trans;
 }
 
-void cfd::Species::read_therm(std::ifstream &therm_dat) {
-  std::string input{};
-  gxl::read_until(therm_dat, input, "THERMO", gxl::Case::upper);  // "THERMO"
-  std::getline(therm_dat, input);  //$T_low$ $T_mid$ $T_high$
-  std::istringstream line(input);
-  double T_low{300}, T_mid{1000}, T_high{5000};
-  line >> T_low >> T_mid >> T_high;
-  t_low.resize(n_spec, T_low);
-  t_mid.resize(n_spec, T_mid);
-  t_high.resize(n_spec, T_high);
-
-  std::string key{};
-  gxl::getline_to_stream(therm_dat, input, line, gxl::Case::upper);
-  line >> key;
-  int n_read{0};
-  while (key != "END" && n_read < n_spec) {
-    if (key == "!" || input[0] == '!' || input.empty()) {
-      gxl::getline_to_stream(therm_dat, input, line, gxl::Case::upper);
-      line >> key;
-      continue;
-    }
-    key.assign(input, 0, 18);
-    gxl::to_stringstream(key, line);
-    line >> key;
-    if (!spec_list.contains(key)) {
-      gxl::getline(therm_dat, input);
-      gxl::getline(therm_dat, input);
-      gxl::getline(therm_dat, input);
-      gxl::getline_to_stream(therm_dat, input, line, gxl::Case::upper);
-      line >> key;
-      continue;
-    }
-    const int curr_sp = spec_list.at(key);
-
-    key.assign(input, 45, 10);  // T_low
-    t_low[curr_sp] = std::stod(key);
-    key.assign(input, 55, 10);  // T_high
-    t_high[curr_sp] = std::stod(key);
-    key.assign(input, 65, 10);  // Probably specify a different T_mid
-    gxl::to_stringstream(key, line);
-    line >> key;
-    if (!key.empty()) t_mid[curr_sp] = std::stod(key);
-
-    // Read element composition
-    std::string comp_str{};
-    for (int i = 0; i < 4; ++i) {
-      comp_str.assign(input, 24 + i * 5, 5);
-      gxl::trim_left(comp_str);
-      if (comp_str.empty() || comp_str.starts_with('0')) break;
-      gxl::to_stringstream(comp_str, line);
-      line >> key;
-      int stoi{0};
-      line >> stoi;
-      elem_comp(curr_sp, elem_list[key]) = stoi;
-    }
-    // Compute the relative molecular weight
-    double mole_weight{0};
-    for (const auto &[element, label]: elem_list) {
-      mole_weight += Element{element}.get_atom_weight() *
-                     elem_comp(curr_sp, label);
-    }
-    mw[curr_sp] = mole_weight;
-
-    // Read the thermodynamic fitting coefficients
-    std::getline(therm_dat, input);
-    std::string cs1{}, cs2{}, cs3{}, cs4{}, cs5{};
-    double c1, c2, c3, c4, c5;
-    cs1.assign(input, 0, 15);
-    cs2.assign(input, 15, 15);
-    cs3.assign(input, 30, 15);
-    cs4.assign(input, 45, 15);
-    cs5.assign(input, 60, 15);
-    c1 = std::stod(cs1);
-    c2 = std::stod(cs2);
-    c3 = std::stod(cs3);
-    c4 = std::stod(cs4);
-    c5 = std::stod(cs5);
-    high_temp_coeff(curr_sp, 0) = c1;
-    high_temp_coeff(curr_sp, 1) = c2;
-    high_temp_coeff(curr_sp, 2) = c3;
-    high_temp_coeff(curr_sp, 3) = c4;
-    high_temp_coeff(curr_sp, 4) = c5;
-    // second line
-    std::getline(therm_dat, input);
-    cs1.assign(input, 0, 15);
-    cs2.assign(input, 15, 15);
-    cs3.assign(input, 30, 15);
-    cs4.assign(input, 45, 15);
-    cs5.assign(input, 60, 15);
-    c1 = std::stod(cs1);
-    c2 = std::stod(cs2);
-    c3 = std::stod(cs3);
-    c4 = std::stod(cs4);
-    c5 = std::stod(cs5);
-    high_temp_coeff(curr_sp, 5) = c1;
-    high_temp_coeff(curr_sp, 6) = c2;
-    low_temp_coeff(curr_sp, 0) = c3;
-    low_temp_coeff(curr_sp, 1) = c4;
-    low_temp_coeff(curr_sp, 2) = c5;
-    // third line
-    std::getline(therm_dat, input);
-    cs1.assign(input, 0, 15);
-    cs2.assign(input, 15, 15);
-    cs3.assign(input, 30, 15);
-    cs4.assign(input, 45, 15);
-    c1 = std::stod(cs1);
-    c2 = std::stod(cs2);
-    c3 = std::stod(cs3);
-    c4 = std::stod(cs4);
-    low_temp_coeff(curr_sp, 3) = c1;
-    low_temp_coeff(curr_sp, 4) = c2;
-    low_temp_coeff(curr_sp, 5) = c3;
-    low_temp_coeff(curr_sp, 6) = c4;
-
-    gxl::getline_to_stream(therm_dat, input, line);
-    line >> key;
-
-    ++n_read;
-  }
-  // fmt::print("Thermodynamic properties are read successfully for {} species.\n", n_spec);
-  therm_dat.close();
-}
-
-void cfd::Species::read_tran(Parameter &parameter) {
-  std::ifstream tran_dat("input_files/" +
-                         parameter.get_string("transport_file"));
+void cfd::Species::read_tran(std::ifstream &tran_dat) {
   std::string input{}, key{};
-  gxl::getline(tran_dat, input, gxl::Case::upper);
   std::istringstream line(input);
-  line >> key;
-  auto &list = spec_list;
-  while (!key.starts_with("END")) {
-    if (!list.contains(key)) {
-      gxl::getline_to_stream(tran_dat, input, line, gxl::Case::upper);
-      line >> key;
+  integer n_read{0};
+  std::vector<int> have_read;
+  while (gxl::getline_to_stream(tran_dat, input, line, gxl::Case::upper)) {
+    if (input[0] == '!' || input.empty()) {
       continue;
     }
-    gxl::to_stringstream(input, line);
-    double lj_potential{0}, collision_diameter{0}, pass{0};
-    line >> key >> pass >> lj_potential >> collision_diameter;
-    const int idx = list.at(key);
-    LJ_potent_inv[idx] = 1.0 / lj_potential;
-    vis_coeff[idx] =
-        2.6693e-6 * sqrt(mw[idx]) / (collision_diameter * collision_diameter);
-    gxl::getline_to_stream(tran_dat, input, line, gxl::Case::upper);
     line >> key;
+    if (key.starts_with("END") || key.starts_with("REACTIONS")) {
+      if (n_read < n_spec) {
+        fmt::print("The transport data aren't enough. We need {} species info but only {} are supplied.\n", n_spec,
+                   n_read);
+      }
+      break;
+    }
+    if (!spec_list.contains(key)) {
+      continue;
+    }
+    if (n_read >= n_spec) break;
+    const int curr_sp = spec_list.at(key);
+    // If the species info has been read, then the second set of parameters are ignored.
+    bool read{false};
+    for (auto ss: have_read) {
+      if (ss == curr_sp) {
+        read = true;
+        break;
+      }
+    }
+    if (read) {
+      continue;
+    }
+
+    gxl::to_stringstream(input, line);
+    real lj_potential{0}, collision_diameter{0}, pass{0};
+    line >> key >> pass >> lj_potential >> collision_diameter;
+    LJ_potent_inv[curr_sp] = 1.0 / lj_potential;
+    vis_coeff[curr_sp] =
+        2.6693e-6 * sqrt(mw[curr_sp]) / (collision_diameter * collision_diameter);
+
+    have_read.push_back(curr_sp);
+    ++n_read;
   }
 
   for (int i = 0; i < n_spec; ++i) {

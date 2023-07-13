@@ -33,12 +33,9 @@ struct Species {
 private:
   void set_nspec(integer n_sp, integer n_elem);
 
-  void register_spec(const std::string &name, integer &index);
+  bool read_therm(std::ifstream &therm_dat, bool read_from_comb_mech);
 
-  void read_therm(Parameter &parameter);
-  void read_therm(std::ifstream &therm_dat);
-
-  void read_tran(Parameter &parameter);
+  void read_tran(std::ifstream &tran_dat);
 };
 
 struct Reaction {
