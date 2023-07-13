@@ -36,6 +36,7 @@ private:
   void register_spec(const std::string &name, integer &index);
 
   void read_therm(Parameter &parameter);
+  void read_therm(std::ifstream &therm_dat);
 
   void read_tran(Parameter &parameter);
 };
