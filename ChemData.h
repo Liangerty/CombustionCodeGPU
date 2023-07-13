@@ -7,6 +7,7 @@
 namespace cfd {
 struct Species {
   explicit Species(Parameter &parameter);
+
   integer n_spec{0};  // number of species
   std::map<std::string, integer> spec_list; // species list
 
@@ -39,7 +40,34 @@ private:
 };
 
 struct Reaction {
-  explicit Reaction(Parameter &parameter);
+  explicit Reaction(Parameter &parameter, const Species& species);
+
+private:
+  void set_nreac(integer nr, integer ns);
+
+  void read_reaction_line(std::string input, integer idx, const Species& species);
+
+  std::string get_auxi_info(std::ifstream &file, integer idx, const cfd::Species &species, bool &is_dup);
+
+public:
+  integer n_reac{0};
+  // The label represents which method to compute kf and kb.
+  // 0 - Irreversible, 1 - Reversible
+  // 2 - REV (reversible with both kf and kb Arrhenius coefficients given)
+  // 3 - DUP (Multiple sets of kf Arrhenius coefficients given)
+  // 4 - Third body reactions ( +M is added on both sides, indicating the reaction needs catylists)
+  // 5 - Lindemann Type (Pressure dependent reactions computed with Lindemann type method)
+  // 6 - Troe-3 (Pressure dependent reactions computed with Troe type method, 3 parameters)
+  // 7 - Troe-4 (Pressure dependent reactions computed with Troe type method, 4 parameters)
+  std::vector<integer> label;
+  gxl::MatrixDyn<integer> stoi_f, stoi_b;
+  std::vector<real> A, b, Ea;
+  std::vector<real> A2, b2, Ea2;
+//  std::vector<bool> thirdBody;
+//  std::vector<bool> duplicate;
+//  std::vector<bool> pressureDep;
+  gxl::MatrixDyn<real> third_body_coeff;
+  std::vector<real> troe_alpha, troe_t3, troe_t1, troe_t2;
 };
 
 struct ChemData {

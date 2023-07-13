@@ -5,6 +5,8 @@
 #include "Constants.h"
 #include "Element.h"
 #include <cmath>
+#include "Parallel.h"
+#include <algorithm>
 
 cfd::Species::Species(Parameter &parameter) {
   parameter.update_parameter("n_spec", 0);
@@ -48,7 +50,7 @@ cfd::Species::Species(Parameter &parameter) {
       }
       gxl::to_upper(input);
       if (input == "END") continue;// If this line is "END", there must be a "REACTIONS" or "THERMO" followed.
-      if (input == "REACTIONS") break;
+      if (input == "REACTIONS" || input == "REAC") break;
       if (input == "THERMO") {
         // The thermodynamic info is in this mechanism file
         has_therm = true;
@@ -58,6 +60,12 @@ cfd::Species::Species(Parameter &parameter) {
       ++num_spec;
     }
     set_nspec(num_spec, n_elem);
+    if (num_spec > MAX_SPEC_NUMBER) {
+      fmt::print(
+          "The number of species in this simulation is {}, larger than the allowed species number {}. Please modify the CMakeLists.txt to increase the MAX_SPEC_NUMBER.\n",
+          num_spec, MAX_SPEC_NUMBER);
+      MpiParallel::exit();
+    }
     parameter.update_parameter("n_spec", num_spec);
     parameter.update_parameter("n_var", parameter.get_int("n_var") + num_spec);
     parameter.update_parameter("n_scalar", parameter.get_int("n_scalar") + num_spec);
@@ -164,7 +172,7 @@ bool cfd::Species::read_therm(std::ifstream &therm_dat, bool read_from_comb_mech
       }
       continue;
     }
-    if (key == "REACTIONS") break;
+    if (key == "REACTIONS" || input == "REAC") break;
     if (key == "TRANSPORT" || key == "TRAN") {
       has_trans = true;
       break;
@@ -297,7 +305,7 @@ void cfd::Species::read_tran(std::ifstream &tran_dat) {
       continue;
     }
     line >> key;
-    if (key.starts_with("END") || key.starts_with("REACTIONS")) {
+    if (key.starts_with("END") || key.starts_with("REACTIONS") || key.starts_with("REAC")) {
       if (n_read < n_spec) {
         fmt::print("The transport data aren't enough. We need {} species info but only {} are supplied.\n", n_spec,
                    n_read);
@@ -340,7 +348,271 @@ void cfd::Species::read_tran(std::ifstream &tran_dat) {
   }
 }
 
-cfd::Reaction::Reaction(Parameter &parameter) {}
+cfd::Reaction::Reaction(Parameter &parameter, const Species &species) {
+  if (!parameter.get_bool("species")) {
+    return;
+  }
+  if (!parameter.get_bool("reaction")) {
+    return;
+  }
+  std::ifstream file("./input_files/" + parameter.get_string("mechanism_file"));
+  std::string input{};
+  const std::vector<std::string> reac_candidate{"REACTIONS", "REAC"};
+  gxl::read_until(file, input, reac_candidate, gxl::Case::keep);
+  std::istringstream line(input);
+  std::string key{};
+  line >> key >> key;
+  if (!key.empty()) {
+    // The units are not default units, we need some convertion here.
+    // Currently, we just use the default ones, here is blanked.
+  }
 
-cfd::ChemData::ChemData(Parameter &parameter) : spec(parameter), reac(parameter) {}
+  integer has_read{0};
+  const integer ns{species.n_spec};
+  set_nreac(100, ns);
+  std::vector<integer> duplicate_reactions{};
+  gxl::getline_to_stream(file, input, line, gxl::Case::upper);
+  while (input != "END") {
+    if (input[0] == '!' || input.empty()) {
+      continue;
+    }
+
+    if (has_read >= n_reac) {
+      set_nreac(n_reac + 100, ns);
+    }
+
+    // If not a comment, then a reaction is specified.
+    read_reaction_line(input, has_read, species);
+    //No matter if this reaction has some auxilliary information, just read and if not,
+    //it will return as nothing happens.
+    bool is_dup{false};
+    input = get_auxi_info(file, has_read, species, is_dup);
+
+    if (is_dup) {
+      bool found = false;
+      integer dup{}, pos{};
+      for (auto r = 0; r < duplicate_reactions.size(); ++r) {
+        bool all_same{true};
+        const integer idx_dup{duplicate_reactions[r]};
+        for (int i = 0; i < ns; ++i) {
+          if (stoi_f(idx_dup, i) != stoi_f(has_read, i) || stoi_b(idx_dup, i) != stoi_b(has_read, i)) {
+            all_same = false;
+            break;
+          }
+        }
+        if (all_same) {
+          found = true;
+          dup = idx_dup;
+          pos = r;
+          break;
+        }
+      }
+      if (found) {
+        A2[dup] = A[has_read];
+        b2[dup] = b[has_read];
+        Ea2[dup] = Ea[has_read];
+        duplicate_reactions.erase(duplicate_reactions.cbegin() + pos);
+        for (int i = 0; i < ns; ++i) {
+          stoi_f(has_read, i) = 0;
+          stoi_b(has_read, i) = 0;
+        }
+        label[has_read]=1;
+      } else {
+        duplicate_reactions.push_back(has_read);
+        ++has_read;
+      }
+      continue;
+    }
+
+    ++has_read;
+  }
+  set_nreac(has_read, ns);
+  if (parameter.get_int("myid") == 0) {
+    fmt::print("{} reactions will be happen among these species.\n", n_reac);
+  }
+}
+
+void cfd::Reaction::set_nreac(integer nr, integer ns) {
+  n_reac = nr;
+  label.resize(nr, 1); // By default, reactions are reversible ones.
+  stoi_f.resize(nr, ns, 0);
+  stoi_b.resize(nr, ns, 0);
+  A.resize(nr, 0);
+  b.resize(nr, 0);
+  Ea.resize(nr, 0);
+  A2.resize(nr, 0);
+  b2.resize(nr, 0);
+  Ea2.resize(nr, 0);
+//  thirdBody.resize(nr, false);
+//  duplicate.resize(nr, false);
+//  pressureDep.resize(nr, false);
+  third_body_coeff.resize(nr, ns, 1);
+  troe_alpha.resize(nr, 0);
+  troe_t3.resize(nr, 0);
+  troe_t1.resize(nr, 0);
+  troe_t2.resize(nr, 0);
+}
+
+void cfd::Reaction::read_reaction_line(std::string input, integer idx, const Species &species) {
+  // First determine if the reaction is pressure dependent or needs catalyst
+  // clean the equation for further use.
+  // std::erase(input, ' ');
+  const std::string leftparen = "(+", catalyst = "+M";
+  auto iter_leftparen = input.find(leftparen);
+  auto iter_catalyst = input.find(catalyst);
+  auto iter_rightparen = input.find(')', iter_leftparen);
+  if (iter_catalyst != std::string::npos) { //If the reaction requires catalyst
+    label[idx] = 4;
+//    thirdBody[idx] = true; //Then we need third body coefficients for the reaction
+    if (iter_leftparen != std::string::npos) { //It is also a pressure dependent reaction
+//      pressureDep[idx] = true;
+      label[idx] = 5;
+      input.erase(input.cbegin() + iter_leftparen,
+                  input.cbegin() + iter_rightparen + 1);//Erase the catalyst because we don't need it.
+      iter_leftparen = input.find(leftparen);
+      iter_rightparen = input.find_last_of(')');
+      input.erase(input.cbegin() + iter_leftparen, input.cbegin() + iter_rightparen + 1);
+    } else {
+      input.erase(iter_catalyst, 2);
+      iter_catalyst = input.find(catalyst);
+      input.erase(iter_catalyst, 2);
+    }
+  }
+
+  auto it_small = input.find('<'), it_eq = input.find('=');// , it_big = input.find(">");
+  if (it_small == std::string::npos) {
+    it_small = it_eq;
+  }
+
+  std::replace(input.begin(), input.begin() + it_small + 1, ' ', '<');
+  std::string reacEq;//Reaction equation
+  std::istringstream line(input);
+  line >> reacEq >> A[idx] >> b[idx] >> Ea[idx];
+  Ea[idx] /= R_c;
+
+  //Split reaction equation into reactant string and product string.
+  it_small = reacEq.find('<');
+  it_eq = reacEq.find('=');
+  auto it_big = reacEq.find('>');
+  if (it_small == std::string::npos) {
+    if (it_big != std::string::npos) {
+      // => is here, the reaction is irreversible
+      label[idx] = 0;
+    } else {
+      it_big = it_eq;
+    }
+    it_small = it_eq;
+  }
+  std::string reactantString, productString;
+  reactantString.assign(reacEq, 0, it_small);
+  productString.assign(reacEq, it_big + 1, reacEq.size());
+
+  //Find the reactants
+  const auto &list = species.spec_list;
+  for (auto it_plus = reactantString.find('+'); it_plus != std::string::npos; it_plus = reactantString.find(
+      '+')) {//First get reactants except the last one into the map.
+    if (reactantString[it_plus + 1] == '+') {
+      // The first '+' is in the reactant name
+      ++it_plus;
+    }
+
+    integer stoi = 1;
+    std::string reactant1;
+    if (isdigit(reactantString[0])) {
+      stoi = std::stoi(reactantString.substr(0, 1));
+      reactantString.erase(0, 1);
+      reactant1.assign(reactantString, 0, it_plus - 1);
+    } else {
+      reactant1.assign(reactantString, 0, it_plus);
+    }
+    stoi_f(idx, list.at(reactant1)) += stoi;
+    reactantString.erase(0, reactant1.size() + 1);
+  }
+  //Next put the last reactant into the map.
+  integer stoi = 1;
+  if (isdigit(reactantString[0])) {
+    stoi = std::stoi(reactantString.substr(0, 1));
+    reactantString.erase(0, 1);
+  }
+  stoi_f(idx, list.at(reactantString)) += stoi;
+
+  //Find the products
+  for (auto it_plus = productString.find('+'); it_plus != std::string::npos; it_plus = productString.find(
+      '+')) {//First get products except the last one into the map.
+    stoi = 1;
+    std::string product1;
+    if (isdigit(productString[0])) {
+      stoi = std::stoi(productString.substr(0, 1));
+      productString.erase(0, 1);
+      product1.assign(productString, 0, it_plus - 1);
+    } else {
+      product1.assign(productString, 0, it_plus);
+    }
+    stoi_b(idx, list.at(product1)) += stoi;
+    productString.erase(0, product1.size() + 1);
+  }
+  //Next put the last product into the map.
+  stoi = 1;
+  if (isdigit(productString[0])) {
+    stoi = std::stoi(productString.substr(0, 1));
+    productString.erase(0, 1);
+  }
+  stoi_b(idx, list.at(productString)) += stoi;
+}
+
+std::string cfd::Reaction::get_auxi_info(std::ifstream &file, integer idx, const cfd::Species &species, bool &is_dup) {
+  std::string input, key;
+  while (gxl::getline(file, input, gxl::Case::upper)) {//&&input.find("=")==std::string::npos
+    std::replace(input.begin(), input.end(), '/', ' ');
+    std::istringstream line(input);
+    line >> key;
+    if (input[0] == '!' || input.empty()) {
+      continue;
+    }
+    if (key == "END") {
+      break;
+    }
+    if (input.find('=') != std::string::npos) {
+      break;
+    }
+    if (key == "PLOG") { //Must be modified later to support this kind of reaction
+      continue;
+    }
+    if (key == "DUPLICATE" || key == "DUP") {
+      //If the keyword is duplicate, return and turn to duplicate reaction reader.
+//      duplicate[idx] = true;
+      is_dup = true;
+      label[idx] = 3;
+      continue;
+    }
+    if (key == "REV") {
+      line >> A2[idx] >> b2[idx] >> Ea2[idx];
+      label[idx] = 2;
+    } else if (key == "LOW") {//Keyword LOW requires 3 new Arrhenius coefficients
+      line >> A2[idx] >> b2[idx] >> Ea2[idx];
+      continue;
+    } else if (key == "TROE") {//Troe form needs the following coefficinets
+      label[idx] = 6;
+      line >> troe_alpha[idx] >> troe_t3[idx] >> troe_t1[idx];
+      std::string what{};
+      line >> what;
+      if (!what.empty()) {
+        troe_t2[idx] = std::stod(what);
+        label[idx] = 7;
+      }
+    } else {//None of the keywords matched, this line should be third body coefficients.
+      line.clear();
+      line.str(input);
+
+      while (line >> key) {
+        real coe{};
+        line >> coe;
+        third_body_coeff(idx, species.spec_list.at(key)) = coe;
+      }
+    }
+  }
+  return input;
+}
+
+cfd::ChemData::ChemData(Parameter &parameter) : spec(parameter), reac(parameter, spec) {}
 
