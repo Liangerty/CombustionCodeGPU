@@ -61,6 +61,7 @@ public:
   // 7 - Troe-4 (Pressure dependent reactions computed with Troe type method, 4 parameters)
   std::vector<integer> label;
   gxl::MatrixDyn<integer> stoi_f, stoi_b;
+  std::vector<integer> order;
   std::vector<real> A, b, Ea;
   std::vector<real> A2, b2, Ea2;
 //  std::vector<bool> thirdBody;

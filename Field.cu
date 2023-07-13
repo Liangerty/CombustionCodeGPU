@@ -11,17 +11,18 @@ cfd::Field<mix_model, turb_method>::Field(Parameter &parameter, const Block &blo
 
 //  cv.resize(mx, my, mz, n_var, ngg);
   bv.resize(mx, my, mz, 6, ngg);
-  if constexpr (mix_model == MixtureModel::Mixture) {
+  if constexpr (mix_model != MixtureModel::Air) {
     n_scalar += parameter.get_int("n_spec");
   }
   if constexpr (turb_method == TurbMethod::RANS) {
     n_scalar += parameter.get_int("n_turb");
     n_other_var += 1; // mut
   }
-  if constexpr (mix_model == MixtureModel::FL && turb_method != TurbMethod::Laminar) {
-    n_scalar += 2 + parameter.get_int("n_spec"); // mixture fraction, and its fluctuation.
-    n_other_var += 1; // scalar dissipation rate
-  }
+  // Ignore the case of flamelet now
+//  if constexpr (mix_model == MixtureModel::FL && turb_method != TurbMethod::Laminar) {
+//    n_scalar += 2 + parameter.get_int("n_spec"); // mixture fraction, and its fluctuation.
+//    n_other_var += 1; // scalar dissipation rate
+//  }
   sv.resize(mx, my, mz, n_scalar, ngg);
   ov.resize(mx, my, mz, n_other_var, ngg);
 //  var_without_ghost_grid.resize(mx, my, mz, 1, 0); // Only to have wall_dist, if more are needed, then add nl.
@@ -130,6 +131,15 @@ void cfd::Field<mix_model, turb_method>::setup_device_memory(const Parameter &pa
   if (h_ptr->n_spec > 0) {
     h_ptr->gamma.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
     h_ptr->cp.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);
+    if constexpr (mix_model == MixtureModel::FR) {
+      if (const integer chemSrcMethod = parameter.get_int("chemSrcMethod");chemSrcMethod == 1) {
+        // EPI
+        h_ptr->chem_src_jac.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_spec * h_ptr->n_spec, 0);
+      } else if (chemSrcMethod == 2) {
+        // DA
+        h_ptr->chem_src_jac.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->n_spec, 0);
+      }
+    }
   }
   if constexpr (turb_method == TurbMethod::RANS) {
     h_ptr->mut.allocate_memory(h_ptr->mx, h_ptr->my, h_ptr->mz, h_ptr->ngg);

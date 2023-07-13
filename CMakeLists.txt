@@ -13,6 +13,7 @@ endif()
 
 #add_compile_definitions(MULTISPECIES=1)
 add_compile_definitions(MAX_SPEC_NUMBER=20)
+add_compile_definitions(MAX_REAC_NUMBER=50)
 add_compile_definitions(GPU)
 
 project(2_CLionGPU CUDA CXX)
@@ -25,7 +26,7 @@ list(APPEND src_file
   ChemData.h ChemData.cpp Constants.h
   DataCommunication.cuh DataCommunication.cu Define.h DParameter.cu DParameter.h DPLURHPP.cuh Driver.cu Driver.cuh
   Element.h Element.cpp
-  Field.h Field.cu FieldOperation.cuh FieldOperation.cu
+  Field.h Field.cu FieldOperation.cuh FieldOperation.cu FiniteRateChem.cu FiniteRateChem.cuh
   ImplicitTreatmentHPP.cuh Initialize.cuh Initialize.cu InviscidScheme.cuh
   Limiter.cuh
   main.cu Mesh.h Mesh.cpp MPIIO.hpp MPIIO.cu

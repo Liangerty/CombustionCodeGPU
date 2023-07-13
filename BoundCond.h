@@ -78,7 +78,7 @@ Inflow<mix_model, turb_method>::Inflow(const std::string &inflow_name, Species &
   }
   const integer n_spec{spec.n_spec};
 
-  if constexpr (mix_model == MixtureModel::Mixture) {
+  if constexpr (mix_model != MixtureModel::Air) {
     // Assign the species mass fraction to the corresponding position.
     // Should be done after knowing the order of species.
     for (auto [name, idx]: spec.spec_list) {
@@ -95,14 +95,14 @@ Inflow<mix_model, turb_method>::Inflow(const std::string &inflow_name, Species &
     // The temperature is not given, thus the density and pressure are given
     temperature = pressure * mw / (density * R_u);
   }
-  if constexpr (mix_model == MixtureModel::Mixture) {
+  if constexpr (mix_model != MixtureModel::Air) {
     viscosity = compute_viscosity(temperature, mw, sv, spec);
   } else {
     viscosity = Sutherland(temperature);
   }
 
   real gamma{gamma_air};
-  if constexpr (mix_model == MixtureModel::Mixture) {
+  if constexpr (mix_model != MixtureModel::Air) {
     std::vector<real> cpi(n_spec, 0);
     spec.compute_cp(temperature, cpi.data());
     real cp{0}, cv{0};

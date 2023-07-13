@@ -416,7 +416,8 @@ cfd::Reaction::Reaction(Parameter &parameter, const Species &species) {
           stoi_f(has_read, i) = 0;
           stoi_b(has_read, i) = 0;
         }
-        label[has_read]=1;
+        label[has_read] = 1;
+        order[has_read] = 0;
       } else {
         duplicate_reactions.push_back(has_read);
         ++has_read;
@@ -437,6 +438,7 @@ void cfd::Reaction::set_nreac(integer nr, integer ns) {
   label.resize(nr, 1); // By default, reactions are reversible ones.
   stoi_f.resize(nr, ns, 0);
   stoi_b.resize(nr, ns, 0);
+  order.resize(nr, 0);
   A.resize(nr, 0);
   b.resize(nr, 0);
   Ea.resize(nr, 0);
@@ -526,6 +528,7 @@ void cfd::Reaction::read_reaction_line(std::string input, integer idx, const Spe
       reactant1.assign(reactantString, 0, it_plus);
     }
     stoi_f(idx, list.at(reactant1)) += stoi;
+    order[idx] -= stoi;
     reactantString.erase(0, reactant1.size() + 1);
   }
   //Next put the last reactant into the map.
@@ -535,6 +538,7 @@ void cfd::Reaction::read_reaction_line(std::string input, integer idx, const Spe
     reactantString.erase(0, 1);
   }
   stoi_f(idx, list.at(reactantString)) += stoi;
+  order[idx] -= stoi;
 
   //Find the products
   for (auto it_plus = productString.find('+'); it_plus != std::string::npos; it_plus = productString.find(
@@ -549,6 +553,7 @@ void cfd::Reaction::read_reaction_line(std::string input, integer idx, const Spe
       product1.assign(productString, 0, it_plus);
     }
     stoi_b(idx, list.at(product1)) += stoi;
+    order[idx] += stoi;
     productString.erase(0, product1.size() + 1);
   }
   //Next put the last product into the map.
@@ -558,6 +563,7 @@ void cfd::Reaction::read_reaction_line(std::string input, integer idx, const Spe
     productString.erase(0, 1);
   }
   stoi_b(idx, list.at(productString)) += stoi;
+  order[idx] += stoi;
 }
 
 std::string cfd::Reaction::get_auxi_info(std::ifstream &file, integer idx, const cfd::Species &species, bool &is_dup) {

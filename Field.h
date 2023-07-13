@@ -38,6 +38,10 @@ struct DZone {
   ggxl::VectorField3D<real> rho_D; // the mass diffusivity of species
   ggxl::Array3D<real> gamma;  // specific heat ratio
   ggxl::Array3D<real> cp;   // specific heat for constant pressure
+
+  // chemical jacobian matrix or diagonal
+  ggxl::VectorField3D<real> chem_src_jac;
+
   // Turbulent variables
   ggxl::Array3D<real> mut;  // turbulent viscosity
   ggxl::Array3D<real> turb_therm_cond; // turbulent thermal conductivity
