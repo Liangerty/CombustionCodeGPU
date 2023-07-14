@@ -38,7 +38,7 @@ __device__ void finite_rate_chemistry(DZone *zone, integer i, integer j, integer
   rate_of_progress(kf, kb, c, q, q1, q2, param);
 
   // compute the chemical source
-  real omega[MAX_REAC_NUMBER];
+  real omega[MAX_REAC_NUMBER * 2];
   memset(omega, 0, MAX_REAC_NUMBER * 2 * sizeof(real));
   real *omega_d = &omega[MAX_REAC_NUMBER];
   chemical_source(q1, q2, omega_d, omega, param);
