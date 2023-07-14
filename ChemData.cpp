@@ -187,8 +187,6 @@ bool cfd::Species::read_therm(std::ifstream &therm_dat, bool read_from_comb_mech
       gxl::getline(therm_dat, input);
       gxl::getline(therm_dat, input);
       gxl::getline(therm_dat, input);
-      gxl::getline_to_stream(therm_dat, input, line, gxl::Case::upper);
-      line >> key;
       continue;
     }
     const int curr_sp = spec_list.at(key);
