@@ -20,8 +20,21 @@ rate_of_progress(const real *kf, const real *kb, const real *c, real *q, real *q
 __device__ void chemical_source(const real *q1, const real *q2, real *omega_d, real *omega, const DParameter *param);
 
 __device__ void
-EPI(DZone *zone, integer i, integer j, integer k, const DParameter *param, const real *q1, const real *q2);
+compute_chem_src_jacobian(DZone *zone, integer i, integer j, integer k, const DParameter *param, const real *q1,
+                          const real *q2);
 
 __device__ void
-DA(DZone *zone, integer i, integer j, integer k, const DParameter *param, const real *q1);
+compute_chem_src_jacobian_diagonal(DZone *zone, integer i, integer j, integer k, const DParameter *param,
+                                   const real *q1);
+
+__global__ void EPI(DZone *zone);
+
+__device__ void EPI_for_dq0(DZone *zone, real diag, integer i, integer j, integer k);
+__device__ void EPI_for_dqk(DZone *zone, real diag, integer i, integer j, integer k, const real* dq_total);
+
+__device__ void solve_chem_system(real *lhs, DZone *zone, integer i, integer j, integer k);
+__device__ void solve_chem_system(real *lhs, real *rhs, integer dim);
+
+__global__ void DA(DZone *zone);
+
 } // cfd

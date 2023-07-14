@@ -429,7 +429,7 @@ cfd::Reaction::Reaction(Parameter &parameter, const Species &species) {
   }
   set_nreac(has_read, ns);
   if (parameter.get_int("myid") == 0) {
-    fmt::print("{} reactions will be happen among these species.\n", n_reac);
+    fmt::print("{} reactions will happen among these species.\n", n_reac);
   }
 }
 

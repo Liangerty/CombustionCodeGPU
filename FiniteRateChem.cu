@@ -52,10 +52,10 @@ __device__ void finite_rate_chemistry(DZone *zone, integer i, integer j, integer
     case 0: // Explicit treatment
       break;
     case 1: // Exact point implicit
-      EPI(zone, i, j, k, param, q1, q2);
+      compute_chem_src_jacobian(zone, i, j, k, param, q1, q2);
       break;
     case 2: // Diagonal approximation
-      DA(zone, i, j, k, param, omega_d);
+      compute_chem_src_jacobian_diagonal(zone, i, j, k, param, omega_d);
       break;
     default: // Default, explicit treatment
       break;
@@ -171,7 +171,8 @@ __device__ void chemical_source(const real *q1, const real *q2, real *omega_d, r
 }
 
 __device__ void
-EPI(DZone *zone, integer i, integer j, integer k, const DParameter *param, const real *q1, const real *q2) {
+compute_chem_src_jacobian(DZone *zone, integer i, integer j, integer k, const DParameter *param, const real *q1,
+                          const real *q2) {
   const integer n_spec{param->n_spec}, n_reac{param->n_reac};
   auto &sv = zone->sv;
   const auto &stoi_f = param->stoi_f, &stoi_b = param->stoi_b;
@@ -193,7 +194,8 @@ EPI(DZone *zone, integer i, integer j, integer k, const DParameter *param, const
 }
 
 __device__ void
-DA(DZone *zone, integer i, integer j, integer k, const DParameter *param, const real *omega_d) {
+compute_chem_src_jacobian_diagonal(DZone *zone, integer i, integer j, integer k, const DParameter *param,
+                                   const real *omega_d) {
   // The method described in 2015-Savard-JCP
   auto &chem_jacobian = zone->chem_src_jac;
   auto &sv = zone->sv;
@@ -205,4 +207,209 @@ DA(DZone *zone, integer i, integer j, integer k, const DParameter *param, const 
     }
   }
 }
+
+__global__ void EPI(DZone *zone) {
+  const integer extent[3]{zone->mx, zone->my, zone->mz};
+  const integer i = blockDim.x * blockIdx.x + threadIdx.x;
+  const integer j = blockDim.y * blockIdx.y + threadIdx.y;
+  const integer k = blockDim.z * blockIdx.z + threadIdx.z;
+  if (i >= extent[0] || j >= extent[1] || k >= extent[2]) return;
+
+  auto &chem_jac = zone->chem_src_jac;
+  const integer n_spec{zone->n_spec};
+  real lhs[MAX_SPEC_NUMBER * MAX_SPEC_NUMBER];
+  memset(lhs, 0, MAX_SPEC_NUMBER * MAX_SPEC_NUMBER * sizeof(real));
+  const real dt{zone->dt_local(i, j, k)};
+
+  for (int m = 0; m < n_spec; ++m) {
+    for (int n = 0; n < n_spec; ++n) {
+      if (m == n) {
+        lhs[m * n_spec + n] = 1.0 - dt * chem_jac(i, j, k, m * n_spec + n);
+      } else {
+        lhs[m * n_spec + n] = -dt * chem_jac(i, j, k, m * n_spec + n);
+      }
+    }
+  }
+  solve_chem_system(lhs, zone, i, j, k);
+}
+
+__device__ void EPI_for_dq0(DZone *zone, real diag, integer i, integer j, integer k) {
+  const integer n_spec{zone->n_spec};
+  real lhs[MAX_SPEC_NUMBER * MAX_SPEC_NUMBER];
+  memset(lhs, 0, MAX_SPEC_NUMBER * MAX_SPEC_NUMBER * sizeof(real));
+  const real dt{zone->dt_local(i, j, k)};
+  auto &chem_jac = zone->chem_src_jac;
+
+  for (int m = 0; m < n_spec; ++m) {
+    for (int n = 0; n < n_spec; ++n) {
+      if (m == n) {
+        lhs[m * n_spec + n] = diag - dt * chem_jac(i, j, k, m * n_spec + n);
+      } else {
+        lhs[m * n_spec + n] = -dt * chem_jac(i, j, k, m * n_spec + n);
+      }
+    }
+  }
+  solve_chem_system(lhs, zone, i, j, k);
+}
+
+__device__ void EPI_for_dqk(DZone *zone, real diag, integer i, integer j, integer k, const real *dq_total) {
+  const integer n_spec{zone->n_spec};
+  real lhs[MAX_SPEC_NUMBER * MAX_SPEC_NUMBER];
+  memset(lhs, 0, MAX_SPEC_NUMBER * MAX_SPEC_NUMBER * sizeof(real));
+  const real dt{zone->dt_local(i, j, k)};
+
+  auto &chem_jac = zone->chem_src_jac;
+  for (int m = 0; m < n_spec; ++m) {
+    for (int n = 0; n < n_spec; ++n) {
+      if (m == n) {
+        lhs[m * n_spec + n] = diag - dt * chem_jac(i, j, k, m * n_spec + n);
+      } else {
+        lhs[m * n_spec + n] = -dt * chem_jac(i, j, k, m * n_spec + n);
+      }
+    }
+  }
+
+  real rhs[MAX_SPEC_NUMBER];
+  memset(rhs, 0, MAX_SPEC_NUMBER * sizeof(real));
+  for (integer l = 0; l < n_spec; ++l) {
+    rhs[l] = dq_total[5 + l] * dt;
+  }
+  solve_chem_system(lhs, rhs, n_spec);
+
+  auto &dqk = zone->dqk;
+  const auto &dq0 = zone->dq0;
+  for (integer l = 0; l < n_spec; ++l) {
+    dqk(i, j, k, l + 5) = dq0(i, j, k, l + 5) + rhs[l];
+  }
+}
+
+__device__ void solve_chem_system(real *lhs, DZone *zone, integer i, integer j, integer k) {
+  const int dim{zone->n_spec};
+  integer ipiv[MAX_SPEC_NUMBER];
+  memset(ipiv, 0, MAX_SPEC_NUMBER * sizeof(integer));
+
+  // Column pivot LU decomposition
+  for (int n = 0; n < dim; ++n) {
+    int ik{n};
+    for (int m = n; m < dim; ++m) {
+      for (int t = 0; t < n; ++t) {
+        lhs[m * dim + n] -= lhs[m * dim + t] * lhs[t * dim + n];
+      }
+      if (std::abs(lhs[m * dim + n]) > std::abs(lhs[ik * dim + n])) {
+        ik = m;
+      }
+    }
+    ipiv[n] = ik;
+    if (ik != n) {
+      for (int t = 0; t < dim; ++t) {
+        auto mid = lhs[ik * dim + t];
+        lhs[ik * dim + t] = lhs[n * dim + t];
+        lhs[n * dim + t] = mid;
+      }
+    }
+    for (int p = n + 1; p < dim; ++p) {
+      for (int t = 0; t < n; ++t) {
+        lhs[n * dim + p] -= lhs[n * dim + t] * lhs[t * dim + p];
+      }
+    }
+    for (int m = n + 1; m < dim; ++m) {
+      lhs[m * dim + n] /= lhs[n * dim + n];
+    }
+  }
+
+  auto &b = zone->dq;
+  // Solve the linear system with LU matrix
+  for (int m = 0; m < dim; ++m) {
+    int t = ipiv[m];
+    if (t != m) {
+      auto mid = b(i, j, k, 5 + t);
+      b(i, j, k, 5 + t) = b(i, j, k, 5 + m);
+      b(i, j, k, 5 + m) = mid;
+    }
+  }
+  for (int m = 1; m < dim; ++m) {
+    for (int t = 0; t < m; ++t) {
+      b(i, j, k, 5 + m) -= lhs[m * dim + t] * b(i, j, k, 5 + t);
+    }
+  }
+  b(i, j, k, 5 + dim - 1) /= lhs[dim * dim - 1]; // dim*dim-1 = (dim - 1)*dim+(dim - 1)
+  for (int m = dim - 2; m >= 0; --m) {
+    for (int t = m + 1; t < dim; ++t) {
+      b(i, j, k, 5 + m) -= lhs[m * dim + t] * b(i, j, k, 5 + t);
+    }
+    b(i, j, k, 5 + m) /= lhs[m * dim + m];
+  }
+}
+
+__device__ void solve_chem_system(real *lhs, real *rhs, integer dim) {
+  integer ipiv[MAX_SPEC_NUMBER];
+  memset(ipiv, 0, MAX_SPEC_NUMBER * sizeof(integer));
+
+  // Column pivot LU decomposition
+  for (int n = 0; n < dim; ++n) {
+    int ik{n};
+    for (int m = n; m < dim; ++m) {
+      for (int t = 0; t < n; ++t) {
+        lhs[m * dim + n] -= lhs[m * dim + t] * lhs[t * dim + n];
+      }
+      if (std::abs(lhs[m * dim + n]) > std::abs(lhs[ik * dim + n])) {
+        ik = m;
+      }
+    }
+    ipiv[n] = ik;
+    if (ik != n) {
+      for (int t = 0; t < dim; ++t) {
+        auto mid = lhs[ik * dim + t];
+        lhs[ik * dim + t] = lhs[n * dim + t];
+        lhs[n * dim + t] = mid;
+      }
+    }
+    for (int p = n + 1; p < dim; ++p) {
+      for (int t = 0; t < n; ++t) {
+        lhs[n * dim + p] -= lhs[n * dim + t] * lhs[t * dim + p];
+      }
+    }
+    for (int m = n + 1; m < dim; ++m) {
+      lhs[m * dim + n] /= lhs[n * dim + n];
+    }
+  }
+
+  // Solve the linear system with LU matrix
+  for (int m = 0; m < dim; ++m) {
+    int t = ipiv[m];
+    if (t != m) {
+      auto mid = rhs[t];
+      rhs[t] = rhs[m];
+      rhs[m] = mid;
+    }
+  }
+  for (int m = 1; m < dim; ++m) {
+    for (int t = 0; t < m; ++t) {
+      rhs[m] -= lhs[m * dim + t] * rhs[t];
+    }
+  }
+  rhs[dim - 1] /= lhs[dim * dim - 1]; // dim*dim-1 = (dim - 1)*dim+(dim - 1)
+  for (int m = dim - 2; m >= 0; --m) {
+    for (int t = m + 1; t < dim; ++t) {
+      rhs[m] -= lhs[m * dim + t] * rhs[t];
+    }
+    rhs[m] /= lhs[m * dim + m];
+  }
+}
+
+__global__ void DA(DZone *zone) {
+  const integer extent[3]{zone->mx, zone->my, zone->mz};
+  const integer i = blockDim.x * blockIdx.x + threadIdx.x;
+  const integer j = blockDim.y * blockIdx.y + threadIdx.y;
+  const integer k = blockDim.z * blockIdx.z + threadIdx.z;
+  if (i >= extent[0] || j >= extent[1] || k >= extent[2]) return;
+
+  const real dt{zone->dt_local(i, j, k)};
+  auto &chem_jac = zone->chem_src_jac;
+  for (int l = 0; l < zone->n_spec; ++l) {
+    zone->dq(i, j, k, 5 + l) /= 1 - dt * chem_jac(i, j, k, l);
+  }
+}
+
+
 } // cfd
