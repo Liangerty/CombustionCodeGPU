@@ -1,0 +1,10 @@
+﻿// Specify information about how to initialize.
+// May specify various parts to initialize, if not, the whole flowfield is initialized with the first farfield boundary.
+// First specify how many groups there are to initialize.
+int groups_init = 1
+
+// Every simulation must specify a default inflow condition to be used,
+// the name should be the same as the corresponding struct name.
+// All points except those specified to be initialized with a different condition below are initialized by this.
+string  default_init    =   freestream
+
