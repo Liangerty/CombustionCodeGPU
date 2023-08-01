@@ -1,7 +1,7 @@
 OpenSTC
 ======
 
-**OpenSTC** is a CFD program written in C++ and CUDA. The program tends to provide an all-in-one CFD simulation tool for Supersonic Turbulent Combustion simulations, where the *all-in-one* means the application levels can be from RANS to DNS. The target users can be industrial engineers (RANS) as well as scientific researchers (LES and DNS).
+**OpenSTC** is a finite difference CFD program for structured grid written in C++ and CUDA. The program tends to provide an all-in-one CFD simulation tool for Supersonic Turbulent Combustion (STC) simulations, where the *all-in-one* means the application levels can be from RANS to DNS. The target users can be industrial engineers (RANS) as well as scientific researchers (LES and DNS).
 
 Comments
 --------------------
@@ -61,7 +61,7 @@ Besides, a formatting library 'fmtlib' is also required. I have included such a 
 
 After we prepare these files, we can compile the program with CMake as follows:
 
-1. We open the bash in the `code` directory, because the `CMakeLists.txt` is there.
+1. We open the bash in the source code directory, because the `CMakeLists.txt` is there.
 2. Create the build directory and find the compiler info:
 
     ```bash
@@ -76,7 +76,7 @@ After we prepare these files, we can compile the program with CMake as follows:
 
    The number after `--parallel` is the number of threads that to be used when compiling the codes.
 
-After these operation, the executable `openstc` should be in `code` directory.
+After these operation, the executable `openstc` should be in the source code directory.
 
 Hey
 -----------------
@@ -85,8 +85,12 @@ Let me argue for another time that the code is still under development and the r
 
 But I do hope you can enjoy using it and make it your major tool in researching or engineering (to make more money).
 
-Therefore, if you have any question about how to use it or any suggestions on better development, or even more functions to be achieved, please let me know by emailing me at [my email](16051068@buaa.edu.cn). Once I see the email, I would reply you with solutions or 'sorry' (for some things I cannot solve immediately).
+Therefore, if you have any question about how to use it or any suggestions on better development, or even more functions to be achieved, please let me know by emailing me at 16051068@buaa.edu.cn. Once I see the email, I would reply you with solutions or 'sorry' (for some things I cannot solve immediately).
 
 I'm not an expert in CFD or STC simulation, just a Ph.D candidate who wants to learn and make progress.
 
 I'd be really appreciate if you can use my program and supply suggestions for me.
+
+Example
+-----------------
+Currently, a test case is given for Burrows-Kurkov combustor. The grid files and settings are in the `input_files` directory. The `openstc` executable should be in the same directory with the `input_files` directory, after which the program can be run from bash.
